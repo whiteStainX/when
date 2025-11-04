@@ -10,7 +10,7 @@ extern "C" {
 #include <kiss_fft.h>
 }
 
-namespace why {
+namespace when {
 
 class DspEngine {
 public:
@@ -57,4 +57,4 @@ private:
     float beat_strength_;
 };
 
-} // namespace why
+} // namespace when

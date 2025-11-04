@@ -9,7 +9,7 @@
 
 #include <miniaudio.h>
 
-namespace why {
+namespace when {
 
 struct AudioMetrics {
     bool active = false;
@@ -88,5 +88,5 @@ private:
     std::atomic<bool> stop_stream_thread_;
 };
 
-} // namespace why
+} // namespace when
 

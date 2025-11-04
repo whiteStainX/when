@@ -10,7 +10,7 @@ extern "C" {
 #include <kiss_fft.h>
 }
 
-namespace why {
+namespace when {
 
 namespace {
 constexpr float kMinDisplayFrequency = 20.0f;
@@ -173,4 +173,4 @@ void DspEngine::process_frame() {
     beat_strength_ = std::clamp(beat_strength_, 0.0f, 1.0f);
 }
 
-} // namespace why
+} // namespace when

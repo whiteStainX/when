@@ -5,10 +5,11 @@
 
 #include "visualizer.h"
 
-namespace why {
+namespace when {
 
 struct PleasureConfig {
-    std::size_t line_count = 32;
+    std::size_t line_count = 10;
+    float width_percent = 0.33f;
     float amplitude_scale = 10.0f;
     float peak_width_percent = 0.5f;
     float randomness_factor = 0.2f;
@@ -25,4 +26,4 @@ private:
     std::mt19937 rng_;
 };
 
-} // namespace why
+} // namespace when
