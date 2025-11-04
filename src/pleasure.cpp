@@ -51,11 +51,13 @@ void PleasureVisualizer::render(struct ncplane* plane, const DspEngine& dsp) {
     std::uniform_real_distribution<float> offset_dist(-1.0f, 1.0f);
 
     for (std::size_t line = 0; line < line_count; ++line) {
-        const std::size_t start_idx = line * bands_per_line;
-        const std::size_t end_idx = std::min<std::size_t>(start_idx + bands_per_line, bands.size());
-        if (start_idx >= end_idx) {
-            break;
-        }
+        // --- New band mapping logic ---
+        const float line_norm = (line_count > 1) ? (static_cast<float>(line) / static_cast<float>(line_count - 1)) : 0.0f;
+        const float target_band_float = line_norm * static_cast<float>(bands.size() - 1);
+        const std::size_t b_idx1 = static_cast<std::size_t>(target_band_float);
+        const std::size_t b_idx2 = std::min(bands.size() - 1, b_idx1 + 1);
+        const float b_frac = target_band_float - b_idx1;
+        const float line_overall_magnitude = bands[b_idx1] + (bands[b_idx2] - bands[b_idx1]) * b_frac;
 
         float base_y = center_y;
         if (line_count > 1) {
@@ -84,7 +86,6 @@ void PleasureVisualizer::render(struct ncplane* plane, const DspEngine& dsp) {
         const int start_col = std::max(0, static_cast<int>(std::floor(start_x)));
         const int end_col = std::min(static_cast<int>(dimx) - 1, static_cast<int>(std::ceil(end_x)));
         const float peak_width = std::max(1.0f, end_x - start_x);
-        const std::size_t line_bins = std::max<std::size_t>(1, end_idx - start_idx);
 
         for (unsigned int x = 0; x < dimx; ++x) {
             float y = base_y;
@@ -94,14 +95,7 @@ void PleasureVisualizer::render(struct ncplane* plane, const DspEngine& dsp) {
                 const float normalized = std::clamp(local_x / peak_width, 0.0f, 1.0f);
                 const float envelope = std::max(0.0f, 1.0f - std::abs(2.0f * normalized - 1.0f));
 
-                const float band_pos = normalized * static_cast<float>(line_bins - 1);
-                const float band_floor = std::floor(band_pos);
-                const std::size_t lower_index = start_idx + static_cast<std::size_t>(band_floor);
-                const std::size_t upper_index = std::min(end_idx - 1, lower_index + 1);
-                const float frac = band_pos - band_floor;
-                const float magnitude = bands[lower_index] + (bands[upper_index] - bands[lower_index]) * frac;
-
-                const float displacement = magnitude * config_.amplitude_scale * envelope;
+                const float displacement = line_overall_magnitude * config_.amplitude_scale * envelope;
                 y -= displacement;
             }
 
