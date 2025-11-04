@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -14,6 +15,7 @@
 
 #include "audio_engine.h"
 #include "ConfigLoader.h"
+#include "dsp.h"
 
 // Default audio settings
 constexpr ma_uint32 SAMPLE_RATE = 48000;
@@ -22,7 +24,10 @@ constexpr std::size_t RING_FRAMES = 48000; // 1 second buffer
 
 static std::atomic<bool> running = true;
 
-void run_visualization(struct notcurses* nc, why::AudioEngine& audio_engine, bool dev_mode) {
+void run_visualization(struct notcurses* nc,
+                       why::AudioEngine& audio_engine,
+                       why::DspEngine& dsp,
+                       bool dev_mode) {
     struct ncplane* stdplane = notcurses_stdplane(nc);
     ncplane_erase(stdplane);
 
@@ -41,6 +46,7 @@ void run_visualization(struct notcurses* nc, why::AudioEngine& audio_engine, boo
 
         // Audio
         const auto samples_read = audio_engine.read_samples(audio_buffer.data(), audio_buffer.size());
+        dsp.push_samples(audio_buffer.data(), samples_read);
 
         // Dev info
         if (dev_mode) {
@@ -64,6 +70,22 @@ void run_visualization(struct notcurses* nc, why::AudioEngine& audio_engine, boo
                      peak,
                      audio_engine.dropped_samples());
             ncplane_putstr_yx(stdplane, dimy > 0 ? dimy - 1 : 0, 0, info);
+
+            const auto& bands = dsp.band_energies();
+            const std::size_t to_show = std::min<std::size_t>(bands.size(), 8);
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed, std::ios::floatfield);
+            oss.precision(3);
+            oss << "Bands:";
+            for (std::size_t i = 0; i < to_show; ++i) {
+                oss << ' ' << i << ':' << bands[i];
+            }
+            if (bands.size() > to_show) {
+                oss << " ...";
+            }
+            const std::string band_line = oss.str();
+            const unsigned int band_y = (dimy > 1) ? dimy - 2 : 0;
+            ncplane_putstr_yx(stdplane, band_y, 0, band_line.c_str());
         }
 
         // Render
@@ -107,7 +129,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    run_visualization(nc, audio_engine, dev_mode);
+    why::DspEngine dsp(SAMPLE_RATE, CHANNELS);
+
+    run_visualization(nc, audio_engine, dsp, dev_mode);
 
     audio_engine.stop();
     notcurses_stop(nc);
