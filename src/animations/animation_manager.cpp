@@ -1,14 +1,6 @@
 #include "animation_manager.h"
 
-#include <iostream>
-
-#include "random_text_animation.h"
-#include "bar_visual_animation.h"
 #include "ascii_matrix_animation.h"
-#include "cyber_rain_animation.h"
-#include "lightning_wave_animation.h"
-#include "breathe_animation.h"
-#include "logging_animation.h"
 
 #include "../config/raw_config.h"
 
@@ -24,20 +16,8 @@ void AnimationManager::load_animations(notcurses* nc, const AppConfig& app_confi
         std::unique_ptr<Animation> new_animation;
         std::string cleaned_type = config::detail::sanitize_string_value(anim_config.type);
 
-        if (cleaned_type == "RandomText") {
-            new_animation = std::make_unique<RandomTextAnimation>();
-        } else if (cleaned_type == "BarVisual") {
-            new_animation = std::make_unique<BarVisualAnimation>();
-        } else if (cleaned_type == "AsciiMatrix") {
+        if (cleaned_type == "AsciiMatrix") {
             new_animation = std::make_unique<AsciiMatrixAnimation>();
-        } else if (cleaned_type == "CyberRain") {
-            new_animation = std::make_unique<CyberRainAnimation>();
-        } else if (cleaned_type == "LightningWave") {
-            new_animation = std::make_unique<LightningWaveAnimation>();
-        } else if (cleaned_type == "Breathe") {
-            new_animation = std::make_unique<BreatheAnimation>();
-        } else if (cleaned_type == "Logging") {
-            new_animation = std::make_unique<LoggingAnimation>();
         }
 
         if (new_animation) {

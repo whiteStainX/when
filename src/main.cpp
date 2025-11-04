@@ -15,8 +15,6 @@
 #include "dsp.h"
 #include "plugins.h"
 #include "renderer.h"
-#include "animations/random_text_animation.h"
-
 int main(int argc, char** argv) {
     std::setlocale(LC_ALL, "");
 

@@ -52,10 +52,14 @@ void AsciiMatrixAnimation::init(notcurses* nc, const AppConfig& config) {
     unsigned int std_cols = 0;
     ncplane_dim_yx(stdplane, &std_rows, &std_cols);
 
-    int desired_y = plane_origin_y_;
-    int desired_x = plane_origin_x_;
+    int desired_y = 0;
+    int desired_x = 0;
+    bool custom_origin_y = false;
+    bool custom_origin_x = false;
     int desired_rows = static_cast<int>(matrix_rows_ + (show_border_ ? 2 : 0));
     int desired_cols = static_cast<int>(matrix_cols_ + (show_border_ ? 2 : 0));
+    bool custom_rows = false;
+    bool custom_cols = false;
 
     for (const auto& anim_config : config.animations) {
         if (anim_config.type == "AsciiMatrix") {
@@ -84,60 +88,75 @@ void AsciiMatrixAnimation::init(notcurses* nc, const AppConfig& config) {
 
             if (anim_config.plane_y) {
                 desired_y = *anim_config.plane_y;
+                custom_origin_y = true;
             }
             if (anim_config.plane_x) {
                 desired_x = *anim_config.plane_x;
+                custom_origin_x = true;
             }
             if (anim_config.plane_rows) {
                 desired_rows = std::max(*anim_config.plane_rows, show_border_ ? 3 : 1);
-            } else {
-                desired_rows = matrix_rows_ + (show_border_ ? 2 : 0);
+                custom_rows = true;
             }
             if (anim_config.plane_cols) {
                 desired_cols = std::max(*anim_config.plane_cols, show_border_ ? 3 : 1);
-            } else {
-                desired_cols = matrix_cols_ + (show_border_ ? 2 : 0);
+                custom_cols = true;
             }
             break;
         }
     }
 
-    if (std_rows > 0) {
-        plane_origin_y_ = std::clamp(desired_y, 0, static_cast<int>(std_rows) - 1);
-    } else {
-        plane_origin_y_ = 0;
+    if (!custom_rows) {
+        desired_rows = matrix_rows_ + (show_border_ ? 2 : 0);
+    }
+    if (!custom_cols) {
+        desired_cols = matrix_cols_ + (show_border_ ? 2 : 0);
     }
 
-    if (std_cols > 0) {
-        plane_origin_x_ = std::clamp(desired_x, 0, static_cast<int>(std_cols) - 1);
-    } else {
-        plane_origin_x_ = 0;
-    }
+    desired_rows = std::max(desired_rows, 1);
+    desired_cols = std::max(desired_cols, 1);
 
     plane_rows_ = 0;
     plane_cols_ = 0;
 
-    const unsigned int available_rows = (std_rows > static_cast<unsigned int>(plane_origin_y_))
-                                            ? std_rows - static_cast<unsigned int>(plane_origin_y_)
-                                            : 0u;
-    const unsigned int available_cols = (std_cols > static_cast<unsigned int>(plane_origin_x_))
-                                            ? std_cols - static_cast<unsigned int>(plane_origin_x_)
-                                            : 0u;
-
-    if (available_rows > 0u) {
-        plane_rows_ = std::clamp(static_cast<unsigned int>(desired_rows), 1u, available_rows);
+    if (std_rows > 0u) {
+        plane_rows_ = std::min<unsigned int>(std_rows, static_cast<unsigned int>(desired_rows));
     }
-    if (available_cols > 0u) {
-        plane_cols_ = std::clamp(static_cast<unsigned int>(desired_cols), 1u, available_cols);
+    if (std_cols > 0u) {
+        plane_cols_ = std::min<unsigned int>(std_cols, static_cast<unsigned int>(desired_cols));
     }
 
-    if (plane_rows_ == 0u) {
+    if (plane_rows_ == 0u && std_rows > 0u) {
         plane_rows_ = std_rows;
-        plane_origin_y_ = 0;
     }
-    if (plane_cols_ == 0u) {
+    if (plane_cols_ == 0u && std_cols > 0u) {
         plane_cols_ = std_cols;
-        plane_origin_x_ = 0;
+    }
+
+    if (std_rows > 0u) {
+        const int std_rows_i = static_cast<int>(std_rows);
+        const int plane_rows_i = static_cast<int>(plane_rows_);
+        const int max_origin_y = std::max(0, std_rows_i - plane_rows_i);
+        if (custom_origin_y) {
+            plane_origin_y_ = std::clamp(desired_y, 0, max_origin_y);
+        } else {
+            plane_origin_y_ = max_origin_y / 2;
+        }
+    } else {
+        plane_origin_y_ = custom_origin_y ? desired_y : 0;
+    }
+
+    if (std_cols > 0u) {
+        const int std_cols_i = static_cast<int>(std_cols);
+        const int plane_cols_i = static_cast<int>(plane_cols_);
+        const int max_origin_x = std::max(0, std_cols_i - plane_cols_i);
+        if (custom_origin_x) {
+            plane_origin_x_ = std::clamp(desired_x, 0, max_origin_x);
+        } else {
+            plane_origin_x_ = max_origin_x / 2;
+        }
+    } else {
+        plane_origin_x_ = custom_origin_x ? desired_x : 0;
     }
 
     if (!load_glyphs_from_file(glyphs_file_path_)) {

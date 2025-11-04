@@ -4,7 +4,6 @@
 #include <random>
 #include <chrono>
 
-#include "animations/random_text_animation.h"
 #include "animations/animation_manager.h"
 
 namespace when {
