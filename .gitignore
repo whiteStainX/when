@@ -1,41 +1,37 @@
-# Prerequisites
-*.d
+# CMake
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Visual Studio
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
 
-# Precompiled Headers
-*.gch
-*.pch
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
 
-# Linker files
-*.ilk
+# macOS
+.DS_Store
 
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
+# Binaries
+*.out
+*.a
 *.so
 *.dylib
-*.dll
 
-# Fortran module files
-*.mod
-*.smod
+# log files
+*.log
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# system config files
+/.vscode
 
-# Executables
-*.exe
-*.out
-*.app
+# assets
+# /assets/
 
-# debug information files
-*.dwo
+# config file
+# when.toml
