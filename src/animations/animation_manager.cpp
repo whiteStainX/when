@@ -1,6 +1,7 @@
 #include "animation_manager.h"
 
 #include "ascii_matrix_animation.h"
+#include "pleasure_animation.h"
 
 #include "../config/raw_config.h"
 
@@ -18,6 +19,8 @@ void AnimationManager::load_animations(notcurses* nc, const AppConfig& app_confi
 
         if (cleaned_type == "AsciiMatrix") {
             new_animation = std::make_unique<AsciiMatrixAnimation>();
+        } else if (cleaned_type == "Pleasure") {
+            new_animation = std::make_unique<PleasureAnimation>();
         }
 
         if (new_animation) {

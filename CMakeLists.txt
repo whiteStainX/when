@@ -17,7 +17,6 @@ endif()
 set(WHEN_SOURCES
   src/ConfigLoader.cpp
   src/audio_engine.cpp
-  src/pleasure.cpp
   src/main.cpp
   src/audio_engine.cpp
   src/config.cpp
@@ -28,6 +27,7 @@ set(WHEN_SOURCES
   src/renderer.cpp
   src/dsp.cpp
   src/animations/ascii_matrix_animation.cpp
+  src/animations/pleasure_animation.cpp
   src/animations/animation_manager.cpp
   src/animations/glyph_utils.cpp
   external/kissfft/kiss_fft.c
