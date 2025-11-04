@@ -16,6 +16,7 @@
 #include "audio_engine.h"
 #include "ConfigLoader.h"
 #include "dsp.h"
+#include "pleasure.h"
 
 // Default audio settings
 constexpr ma_uint32 SAMPLE_RATE = 48000;
@@ -27,6 +28,7 @@ static std::atomic<bool> running = true;
 void run_visualization(struct notcurses* nc,
                        why::AudioEngine& audio_engine,
                        why::DspEngine& dsp,
+                       why::PleasureVisualizer& visualizer,
                        bool dev_mode) {
     struct ncplane* stdplane = notcurses_stdplane(nc);
     ncplane_erase(stdplane);
@@ -47,6 +49,8 @@ void run_visualization(struct notcurses* nc,
         // Audio
         const auto samples_read = audio_engine.read_samples(audio_buffer.data(), audio_buffer.size());
         dsp.push_samples(audio_buffer.data(), samples_read);
+
+        visualizer.render(stdplane, dsp);
 
         // Dev info
         if (dev_mode) {
@@ -130,8 +134,9 @@ int main(int argc, char** argv) {
     }
 
     why::DspEngine dsp(SAMPLE_RATE, CHANNELS);
+    why::PleasureVisualizer visualizer({});
 
-    run_visualization(nc, audio_engine, dsp, dev_mode);
+    run_visualization(nc, audio_engine, dsp, visualizer, dev_mode);
 
     audio_engine.stop();
     notcurses_stop(nc);
