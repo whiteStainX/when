@@ -45,10 +45,17 @@ safe_mode = false
 [[animations]]
 type = "AsciiMatrix"
 z_index = 2
-initially_active = true
+initially_active = false
 glyphs_file_path = "assets/ascii_matrix.txt"
 matrix_rows = 12
 matrix_cols = 40
 matrix_show_border = true
 matrix_beat_boost = 2.0
 matrix_beat_threshold = 0.55
+
+[[animations]]
+type = "Pleasure"
+z_index = 3
+initially_active = true
+plane_rows = 24
+plane_cols = 48
