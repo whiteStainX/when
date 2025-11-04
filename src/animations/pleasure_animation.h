@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <vector>
 
 #include <notcurses/notcurses.h>
@@ -48,6 +49,7 @@ private:
                             const std::vector<uint8_t>& cells,
                             unsigned int cell_rows,
                             unsigned int cell_cols) const;
+    void configure_history_capacity();
 
     ncplane* plane_ = nullptr;
     int z_index_ = 0;
@@ -57,6 +59,10 @@ private:
     unsigned int plane_cols_ = 0;
     int plane_origin_y_ = 0;
     int plane_origin_x_ = 0;
+
+    std::deque<float> history_buffer_;
+    std::size_t history_capacity_ = 0u;
+    float last_magnitude_ = 0.0f;
 };
 
 } // namespace animations

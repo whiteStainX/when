@@ -1,10 +1,13 @@
 #include "pleasure_animation.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>
 #include <vector>
+
+#include "animation_event_utils.h"
 
 namespace when {
 namespace animations {
@@ -14,6 +17,8 @@ constexpr unsigned int kDefaultPlaneRows = 24;
 constexpr unsigned int kDefaultPlaneCols = 48;
 constexpr int kBrailleRowsPerCell = 4;
 constexpr int kBrailleColsPerCell = 2;
+constexpr float kMagnitudeScale = 4.5f;
+constexpr float kHistorySmoothing = 0.2f;
 } // namespace
 
 PleasureAnimation::PleasureAnimation() = default;
@@ -94,13 +99,40 @@ void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
     }
 
     create_or_resize_plane(nc);
+
+    configure_history_capacity();
+    last_magnitude_ = 0.0f;
 }
 
 void PleasureAnimation::update(float /*delta_time*/,
                                const AudioMetrics& /*metrics*/,
-                               const std::vector<float>& /*bands*/,
+                               const std::vector<float>& bands,
                                float /*beat_strength*/) {
-    // No-op for scaffolding step.
+    if (history_capacity_ < 2u) {
+        return;
+    }
+
+    float magnitude = 0.0f;
+    if (!bands.empty()) {
+        const std::size_t slice_size = std::max<std::size_t>(1u, bands.size() / 8u);
+        const std::size_t upper = std::min<std::size_t>(bands.size(), slice_size);
+        if (upper > 0u) {
+            float sum = 0.0f;
+            for (std::size_t i = 0; i < upper; ++i) {
+                sum += std::abs(bands[i]);
+            }
+            magnitude = sum / static_cast<float>(upper);
+        }
+    }
+
+    const float smoothed = (1.0f - kHistorySmoothing) * last_magnitude_ +
+                           kHistorySmoothing * magnitude;
+    last_magnitude_ = smoothed;
+
+    history_buffer_.push_front(smoothed);
+    while (history_buffer_.size() > history_capacity_) {
+        history_buffer_.pop_back();
+    }
 }
 
 void PleasureAnimation::render(notcurses* /*nc*/) {
@@ -124,13 +156,47 @@ void PleasureAnimation::render(notcurses* /*nc*/) {
         return;
     }
 
-    const int start_y = std::clamp(10, 0, pixel_rows - 1);
-    const int start_x = std::clamp(10, 0, pixel_cols - 1);
-    const int end_y = std::clamp(70, 0, pixel_rows - 1);
-    const int end_x = std::clamp(90, 0, pixel_cols - 1);
-
     std::vector<uint8_t> braille_cells(rows * cols, 0);
-    draw_line(braille_cells, rows, cols, start_y, start_x, end_y, end_x);
+
+    const std::size_t history_size = history_buffer_.size();
+    if (history_size < 2u) {
+        return;
+    }
+
+    const float max_index = static_cast<float>(history_size - 1u);
+    const float max_x = static_cast<float>(pixel_cols - 1);
+
+    const int baseline = pixel_rows / 2;
+    const int amplitude_range = std::max(1, std::min(baseline, pixel_rows - 1 - baseline));
+
+    for (std::size_t j = 0; j + 1 < history_size; ++j) {
+        const float sample_a = history_buffer_[j];
+        const float sample_b = history_buffer_[j + 1];
+
+        const float scaled_a = std::clamp(sample_a * kMagnitudeScale, 0.0f, 1.0f);
+        const float scaled_b = std::clamp(sample_b * kMagnitudeScale, 0.0f, 1.0f);
+
+        const float centered_a = scaled_a * 2.0f - 1.0f;
+        const float centered_b = scaled_b * 2.0f - 1.0f;
+
+        int y1 = baseline - static_cast<int>(std::lround(centered_a * amplitude_range));
+        int y2 = baseline - static_cast<int>(std::lround(centered_b * amplitude_range));
+
+        y1 = std::clamp(y1, 0, pixel_rows - 1);
+        y2 = std::clamp(y2, 0, pixel_rows - 1);
+
+        const float x_norm_a = (max_index - static_cast<float>(j)) / std::max(1.0f, max_index);
+        const float x_norm_b = (max_index - static_cast<float>(j + 1u)) / std::max(1.0f, max_index);
+
+        int x1 = static_cast<int>(std::lround(x_norm_a * max_x));
+        int x2 = static_cast<int>(std::lround(x_norm_b * max_x));
+
+        x1 = std::clamp(x1, 0, pixel_cols - 1);
+        x2 = std::clamp(x2, 0, pixel_cols - 1);
+
+        draw_line(braille_cells, rows, cols, y1, x1, y2, x2);
+    }
+
     blit_braille_cells(plane_, braille_cells, rows, cols);
 }
 
@@ -145,8 +211,8 @@ void PleasureAnimation::deactivate() {
     }
 }
 
-void PleasureAnimation::bind_events(const AnimationConfig& /*config*/, events::EventBus& /*bus*/) {
-    // No event subscriptions for scaffolding.
+void PleasureAnimation::bind_events(const AnimationConfig& config, events::EventBus& bus) {
+    bind_standard_frame_updates(this, config, bus);
 }
 
 void PleasureAnimation::draw_line(std::vector<uint8_t>& cells,
@@ -297,6 +363,18 @@ void PleasureAnimation::create_or_resize_plane(notcurses* nc) {
     if (plane_) {
         ncplane_dim_yx(plane_, &plane_rows_, &plane_cols_);
     }
+}
+
+void PleasureAnimation::configure_history_capacity() {
+    history_capacity_ = 0u;
+
+    if (plane_) {
+        const std::size_t pixel_cols = static_cast<std::size_t>(plane_cols_) *
+                                       static_cast<std::size_t>(kBrailleColsPerCell);
+        history_capacity_ = std::max<std::size_t>(2u, pixel_cols);
+    }
+
+    history_buffer_.assign(history_capacity_, 0.0f);
 }
 
 } // namespace animations
