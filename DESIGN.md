@@ -1,83 +1,71 @@
-# DESIGN.md
+# Project Architecture: `when` Audio Visualizer
 
-## 1. Goal
+This document outlines the high-level architecture of the `when` audio visualizer. The design is centered around a decoupled, event-driven model that promotes modularity and extensibility.
 
-To create a real-time, music-responsive terminal application that visually imitates the "Unknown Pleasures" album cover. The visualization will be rendered using Braille characters in a `notcurses` TUI, with nearer lines dynamically occluding farther lines based on audio frequency data.
+## Core Modules and Their Responsibilities
 
-## 2. High-Level Architecture
+- **`main.cpp`**: The application entry point. It handles command-line parsing, initializes all core modules, and runs the main application loop.
+- **`AudioEngine`**: Responsible for all audio input. It captures audio from a microphone or system, or streams from a file, providing raw audio samples.
+- **`DspEngine`**: Performs digital signal processing. Its primary functions are Fast Fourier Transform (FFT), beat detection, and spectral analysis. **It acts as a primary event emitter**, publishing events like `BeatDetectedEvent` and `SpectralNoveltyEvent`.
+- **`EventBus`**: The central dispatcher for the event-driven system. It receives events from publishers and forwards them to subscribers, decoupling the components.
+- **`AnimationManager`**: Orchestrates the animation subsystem. It loads animations from the configuration, publishes the main `FrameUpdateEvent` to the `EventBus` on each frame, and manages the rendering of all active animations.
+- **`Animation` (Interface)**: The base class for all visual effects. Concrete animations inherit from this, implement their visual logic, and subscribe to events via the `bind_events` method.
+- **`Config`**: Manages application configuration, loading settings from `when.toml`.
+- **`PluginManager`**: Provides an extensible plugin system, allowing custom code to react to application events.
 
-The application follows a modular, pipeline-based architecture. Raw audio is captured, processed into frequency data, transformed into a visual representation, and finally rendered to the screen.
-
-```
-+------------------+      +-------------------+      +----------------------+
-|                  |      |                   |      |                      |
-|   AudioEngine    +----->+     DspEngine     +----->+  PleasureVisualizer  |
-|  (miniaudio)     |      |     (kissfft)     |      |   (Occlusion Logic)  |
-|                  |      |                   |      |                      |
-+------------------+      +-------------------+      +----------------------+
-       | (Raw audio)                                         | (Braille buffer)
-       |                                                       |
-       v                                                       v
-+-----------------------------------------------------------------------------+
-|                                                                             |
-|                                Main App Loop                                |
-|                                 (main.cpp)                                  |
-|                                                                             |
-+-----------------------------------------------------------------------------+
-       ^                                                       |
-       | (User input 'q')                                      | (Render frame)
-       |                                                       v
-+------------------+      +-------------------+      +----------------------+
-|                  |      |                   |      |                      |
-|    Notcurses     +<-----+   ConfigLoader    |<-----+       when.toml      |
-|    (Display)     |      |    (toml++)       |      |      (Config File)   |
-|                  |      |                   |      |                      |
-+------------------+      +-------------------+      +----------------------+
-```
-
-## 3. Folder Setup
-
-The project will be organized to maintain a clear separation of concerns.
+## Data Flow and Interactions (Event-Driven)
 
 ```
-when/
-├── build/                  // Build directory
-├── external/               // 3rd-party libraries
-├── src/
-│   ├── audio_engine.h      // Audio capture interface
-│   ├── audio_engine.cpp    // Audio capture implementation
-│   ├── dsp.h               // Digital Signal Processing interface (FFT)
-│   ├── dsp.cpp             // DSP implementation
-│   ├── ConfigLoader.h      // Configuration loading interface
-│   ├── ConfigLoader.cpp    // Configuration loading implementation
-│   ├── visualizer.h        // Abstract base class for visualizations
-│   ├── pleasure.h          // "Pleasure" visualization class header
-│   ├── pleasure.cpp        // "Pleasure" visualization class implementation
-│   └── main.cpp            // Main application entry point and loop
-├── CMakeLists.txt          // Build script
-├── when.toml               // Configuration file
-├── PLAN.md                 // Development plan
-└── DESIGN.md               // This design document
++-------------+   reads   +---------------+   pushes   +-------------------+
+|  main.cpp   |---------->|  AudioEngine  |----------->|     DspEngine     |
+| (Main Loop) |           +---------------+            |  (Event Emitter)  |
++-------------+                                        +---------+---------+
+      |                                                            |
+      | 1. On each frame, calls...                                 | 2. Publishes specific
+      |                                                            |    audio events (Beat,
+      v                                                            |    Novelty, etc.)
++------------------+  3. Publishes general    +-------------+      v
+| AnimationManager |----------------------->|             |--------------------->+--------------------+
+| (Event Emitter)  |   FrameUpdateEvent      |  EventBus   | 4. Dispatches events | Animation Instances|
++------------------+                         |             |--------------------->| (Subscribers)      |
+                                             +-------------+                      +--------------------+
 ```
 
-## 4. Components
+### Explanation of Data Flow:
 
-Each component has a single, well-defined responsibility.
+1.  **Audio Processing:** In the main loop, `main.cpp` reads raw audio from the `AudioEngine` and pushes it to the `DspEngine`.
+2.  **DSP Event Publishing:** The `DspEngine` analyzes the audio and publishes specific, high-level events (e.g., `BeatDetectedEvent`, `SpectralNoveltyEvent`) directly to the `EventBus`.
+3.  **Frame Event Publishing:** `main.cpp` calls `animation_manager.update_all()`, which publishes the general `FrameUpdateEvent` containing timing information and raw FFT data.
+4.  **Event Dispatching & Animation Logic:** The `EventBus` forwards all events to the `Animation` instances that have subscribed to them. The animations react to these events to update their internal state and visuals.
+5.  **Rendering:** After events are published, `main.cpp` calls `animation_manager.render_all()`, which renders all active animations.
 
--   **Main (`main.cpp`):** The central orchestrator. It initializes all components, runs the main application loop, pumps data between components, and handles user input for termination.
+## Module APIs (High-Level)
 
--   **AudioEngine (`audio_engine.h/.cpp`):** Responsible for capturing raw audio samples using `miniaudio`. It can capture from a microphone or, if specified, from the system's audio output ("black hole"). It makes the raw sample data available via a ring buffer.
+### `DspEngine`
 
--   **DspEngine (`dsp.h/.cpp`):** Consumes raw audio samples from the `AudioEngine`. It uses the `kissfft` library to perform a Fast Fourier Transform (FFT), converting the time-domain audio signal into frequency-domain data (i.e., frequency magnitudes).
+- **Constructor**: `DspEngine(sample_rate, channels, fft_size, hop_size, bands, event_bus)`
+- `push_samples(samples, count)`: Feeds raw audio for processing and triggers event publishing.
 
--   **ConfigLoader (`ConfigLoader.h/.cpp`):** Parses the `when.toml` file using `toml++`. It provides type-safe configuration data to other components, allowing for easy tuning of visualization parameters without recompiling.
+### `AnimationManager`
 
--   **Visualizer (`visualizer.h`):** An abstract base class that defines the common interface for any visualization effect. This ensures that new visualizations can be added in a modular way. It will define a primary method, e.g., `render(const DspData&, ncplane*)`.
+- `load_animations(nc, app_config)`: Loads all animations from the config and calls their `bind_events` method.
+- `update_all(delta_time, metrics, bands, beat_strength)`: Publishes the frame's general `FrameUpdateEvent`.
+- `render_all(nc)`: Renders all active animations.
 
--   **PleasureVisualizer (`pleasure.h/.cpp`):** A concrete implementation of the `Visualizer` interface. This is the core of the project, containing the logic to:
-    1.  Map frequency data to the vertical displacement of the lines.
-    2.  Implement the "skyline" algorithm for line occlusion.
-    3.  Generate a 2D buffer of Braille dots representing the final scene.
-    4.  Convert the dot buffer into Unicode Braille characters for rendering.
+### `Animation` (Interface)
 
--   **Notcurses (Library):** The rendering backend. It is managed by `main.cpp` and is responsible for all terminal drawing operations.
+- `virtual void init(nc, config)`: For one-time setup.
+- `virtual void bind_events(config, bus)`: **Crucial method** where the animation subscribes to events from the `EventBus`.
+- `virtual void update(...)`: Logic to run on a `FrameUpdateEvent` (if subscribed).
+- `virtual void render(nc)`: Draws the animation's current state.
+
+### `EventBus`
+
+- `subscribe<T>(handler)`: Allows a listener to subscribe to an event of type `T`.
+- `publish<T>(event)`: Publishes an event to all registered subscribers.
+
+## Design Principles
+
+- **Decoupling:** Components are independent. The `DspEngine` does not know about animations, and animations do not know where audio events originate.
+- **Modularity:** All logic for an animation is contained within its class.
+- **Extensibility:** New animations can be created and integrated without modifying core systems.
