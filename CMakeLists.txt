@@ -18,8 +18,22 @@ set(WHEN_SOURCES
   src/ConfigLoader.cpp
   src/audio_engine.cpp
   src/pleasure.cpp
-  src/dsp.cpp
   src/main.cpp
+  src/audio_engine.cpp
+  src/config.cpp
+  src/config/raw_config.cpp
+  src/config/value_parsers.cpp
+  src/config/animation_config_parser.cpp
+  src/plugins.cpp
+  src/renderer.cpp
+  src/dsp.cpp
+  src/animations/random_text_animation.cpp
+  src/animations/bar_visual_animation.cpp
+  src/animations/ascii_matrix_animation.cpp
+  src/animations/cyber_rain_animation.cpp
+  src/animations/lightning_wave_animation.cpp
+  src/animations/breathe_animation.cpp
+  src/animations/logging_animation.cpp
   external/kissfft/kiss_fft.c
 )
 
