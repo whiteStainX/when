@@ -1,5 +1,8 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -26,6 +29,8 @@ void run_visualization(struct notcurses* nc, why::AudioEngine& audio_engine, boo
     std::vector<float> audio_buffer(RING_FRAMES);
 
     while (running) {
+        ncplane_erase(stdplane);
+
         // Input
         ncinput nci;
         if (notcurses_get_nblock(nc, &nci) > 0) {
@@ -41,10 +46,24 @@ void run_visualization(struct notcurses* nc, why::AudioEngine& audio_engine, boo
         if (dev_mode) {
             unsigned int dimy, dimx;
             ncplane_dim_yx(stdplane, &dimy, &dimx);
-            char info[128];
-            snprintf(info, sizeof(info), "Capturing... Samples read: %zu | Dropped: %zu",
-                     samples_read, audio_engine.dropped_samples());
-            ncplane_putstr_yx(stdplane, dimy - 1, 0, info);
+            float peak = 0.0f;
+            double sum_square = 0.0;
+            for (std::size_t i = 0; i < samples_read; ++i) {
+                const float sample = audio_buffer[i];
+                peak = std::max(peak, std::abs(sample));
+                sum_square += static_cast<double>(sample) * static_cast<double>(sample);
+            }
+            const double rms = samples_read > 0 ? std::sqrt(sum_square / static_cast<double>(samples_read)) : 0.0;
+
+            char info[256];
+            snprintf(info,
+                     sizeof(info),
+                     "Capturing... Samples read: %zu | RMS: %.4f | Peak: %.4f | Dropped: %zu",
+                     samples_read,
+                     rms,
+                     peak,
+                     audio_engine.dropped_samples());
+            ncplane_putstr_yx(stdplane, dimy > 0 ? dimy - 1 : 0, 0, info);
         }
 
         // Render
