@@ -6,14 +6,18 @@ This document outlines the phased development plan for the "when" music visualiz
 
 **Goal:** Establish a complete data pipeline from audio capture to frequency analysis. Verify that we are correctly processing audio into usable frequency data.
 
+**Status:** ✅ Completed
+
 **Steps:**
-1.  **Implement `DspEngine`:** Create the `dsp.h` and `dsp.cpp` files. This class will be responsible for all signal processing.
-2.  **FFT Initialization:** The `DspEngine` constructor will initialize the `kissfft` configuration based on a given FFT size.
-3.  **Processing Method:** Implement a method, `process_audio(float* samples, size_t count)`, that takes raw audio data, applies a windowing function (e.g., Hann) to reduce spectral leakage, and executes the FFT.
-4.  **Data Storage:** The `DspEngine` will store the resulting frequency bin magnitudes in an internal buffer, accessible via a getter.
-5.  **Integration:** In `main.cpp`, instantiate the `DspEngine`.
-6.  **Pipeline:** In the main loop, fetch raw samples from the `AudioEngine` and pass them to the `DspEngine` for processing.
-7.  **Verification:** In dev mode, print a selection of the raw frequency bin magnitudes to the screen to confirm the audio-to-DSP pipeline is functional.
+- [x] **Implement `DspEngine`:** Create the `dsp.h` and `dsp.cpp` files. This class will be responsible for all signal processing.
+- [x] **FFT Initialization:** The `DspEngine` constructor will initialize the `kissfft` configuration based on a given FFT size.
+- [x] **Processing Method:** Implement a method, `process_audio(float* samples, size_t count)`, that takes raw audio data, applies a windowing function (e.g., Hann) to reduce spectral leakage, and executes the FFT.
+- [x] **Data Storage:** The `DspEngine` will store the resulting frequency bin magnitudes in an internal buffer, accessible via a getter.
+- [x] **Integration:** In `main.cpp`, instantiate the `DspEngine`.
+- [x] **Pipeline:** In the main loop, fetch raw samples from the `AudioEngine` and pass them to the `DspEngine` for processing.
+- [x] **Verification:** In dev mode, print a selection of the raw frequency bin magnitudes to the screen to confirm the audio-to-DSP pipeline is functional.
+
+**Notes:** Integrated `DspEngine` into the main loop, forwarding captured samples and displaying the first few band magnitudes in developer mode for verification.
 
 ## Phase 2: Basic Line Rendering
 
