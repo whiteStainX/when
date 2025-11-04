@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
-namespace why::config::detail {
+namespace when::config::detail {
 
 namespace {
 std::string trim_and_lower(std::string value) {
@@ -114,5 +114,5 @@ bool parse_int32(const std::string& value, int& out) {
     return true;
 }
 
-} // namespace why::config::detail
+} // namespace when::config::detail
 

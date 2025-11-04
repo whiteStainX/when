@@ -6,7 +6,7 @@
 
 #include "animation.h"
 
-namespace why {
+namespace when {
 namespace animations {
 
 class CyberRainAnimation : public Animation {
@@ -100,4 +100,4 @@ private:
 };
 
 } // namespace animations
-} // namespace why
+} // namespace when

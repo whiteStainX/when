@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace why::config::detail {
+namespace when::config::detail {
 
 struct RawScalar {
     std::string value;
@@ -28,5 +28,5 @@ RawConfig parse_raw_config(const std::string& path,
 
 std::string sanitize_string_value(const std::string& value);
 
-} // namespace why::config::detail
+} // namespace when::config::detail
 

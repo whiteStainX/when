@@ -9,7 +9,7 @@
 #include "animations/animation_manager.h" // Include AnimationManager
 #include "config.h" // Include AppConfig
 
-namespace why {
+namespace when {
 
 void render_frame(notcurses* nc,
                float time_s,
@@ -22,5 +22,5 @@ void render_frame(notcurses* nc,
 
 void load_animations_from_config(notcurses* nc, const AppConfig& config);
 
-} // namespace why
+} // namespace when
 

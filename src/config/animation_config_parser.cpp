@@ -4,7 +4,7 @@
 
 #include "value_parsers.h"
 
-namespace why::config::detail {
+namespace when::config::detail {
 
 std::optional<AnimationConfig> parse_animation_config(
     const std::unordered_map<std::string, RawScalar>& raw_anim_config,
@@ -334,5 +334,5 @@ std::optional<AnimationConfig> parse_animation_config(
     return anim_config;
 }
 
-} // namespace why::config::detail
+} // namespace when::config::detail
 

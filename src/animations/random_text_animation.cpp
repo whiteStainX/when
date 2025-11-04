@@ -7,7 +7,7 @@
 #include "random_text_animation.h"
 #include "animation_event_utils.h"
 
-namespace why {
+namespace when {
 namespace animations {
 
 RandomTextAnimation::RandomTextAnimation()
@@ -376,4 +376,4 @@ void RandomTextAnimation::bind_events(const AnimationConfig& config, events::Eve
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when

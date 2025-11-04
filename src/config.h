@@ -8,7 +8,7 @@
 
 
 
-namespace why {
+namespace when {
 
 struct AudioCaptureConfig {
     bool enabled = true;
@@ -145,5 +145,5 @@ ConfigLoadResult load_app_config(const std::string& path);
 
 
 
-} // namespace why
+} // namespace when
 

@@ -9,7 +9,7 @@
 #include "../config.h" // Include AppConfig
 #include "../events/event_bus.h"
 
-namespace why {
+namespace when {
 namespace animations {
 
 template<typename AnimationT>
@@ -63,5 +63,5 @@ private:
 };
 
 } // namespace animations
-} // namespace why
+} // namespace when
 

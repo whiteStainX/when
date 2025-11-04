@@ -6,7 +6,7 @@
 #include <cmath>
 #include <fstream>
 
-namespace why {
+namespace when {
 namespace animations {
 
 namespace {
@@ -492,4 +492,4 @@ void BreatheAnimation::bind_events(const AnimationConfig& config, events::EventB
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when

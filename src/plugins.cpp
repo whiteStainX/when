@@ -8,7 +8,7 @@
 #include <sstream>
 #include <system_error>
 
-namespace why {
+namespace when {
 namespace {
 
 class BeatFlashDebugPlugin final : public Plugin {
@@ -138,5 +138,5 @@ void register_builtin_plugins(PluginManager& manager) {
     manager.register_factory("beat-flash-debug", []() { return std::make_unique<BeatFlashDebugPlugin>(); });
 }
 
-} // namespace why
+} // namespace when
 

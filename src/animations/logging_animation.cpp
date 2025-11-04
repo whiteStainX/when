@@ -9,7 +9,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace why {
+namespace when {
 namespace animations {
 
 namespace {
@@ -762,4 +762,4 @@ void LoggingAnimation::bind_events(const AnimationConfig& config, events::EventB
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when

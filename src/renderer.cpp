@@ -7,7 +7,7 @@
 #include "animations/random_text_animation.h"
 #include "animations/animation_manager.h"
 
-namespace why {
+namespace when {
 
 namespace {
 static animations::AnimationManager animation_manager;
@@ -70,4 +70,4 @@ void render_frame(notcurses* nc,
     }
 }
 
-} // namespace why
+} // namespace when

@@ -18,7 +18,7 @@
 int main(int argc, char** argv) {
     std::setlocale(LC_ALL, "");
 
-    std::string config_path = "why.toml";
+    std::string config_path = "when.toml";
     std::string file_path;
     std::string device_name_override;
     int system_override = -1; // -1 = use config, 0 = mic, 1 = system
@@ -49,8 +49,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    const why::ConfigLoadResult config_result = why::load_app_config(config_path);
-    const why::AppConfig& config = config_result.config;
+    const when::ConfigLoadResult config_result = when::load_app_config(config_path);
+    const when::AppConfig& config = config_result.config;
     if (!config_result.loaded_file) {
         std::clog << "[config] using built-in defaults (missing '" << config_path << "')" << std::endl;
     } else {
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
     }
     const std::size_t ring_frames = std::max<std::size_t>(1024, config.audio.capture.ring_frames);
 
-    why::AudioEngine audio(sample_rate,
+    when::AudioEngine audio(sample_rate,
                            channels,
                            ring_frames,
                            use_file_stream ? file_path : std::string{},
@@ -101,14 +101,14 @@ int main(int argc, char** argv) {
         }
     }
 
-    why::DspEngine dsp(sample_rate,
+    when::DspEngine dsp(sample_rate,
                        channels,
                        config.dsp.fft_size,
                        config.dsp.hop_size,
                        config.dsp.bands);
 
-    why::PluginManager plugin_manager;
-    why::register_builtin_plugins(plugin_manager);
+    when::PluginManager plugin_manager;
+    when::register_builtin_plugins(plugin_manager);
     plugin_manager.load_from_config(config);
     for (const std::string& warning : plugin_manager.warnings()) {
         std::cerr << "[plugin] " << warning << std::endl;
@@ -129,11 +129,11 @@ int main(int argc, char** argv) {
 
     const std::size_t scratch_samples = std::max<std::size_t>(4096, ring_frames * static_cast<std::size_t>(channels));
     std::vector<float> audio_scratch(scratch_samples);
-    why::AudioMetrics audio_metrics{};
+    when::AudioMetrics audio_metrics{};
     audio_metrics.active = audio_active;
 
     // Load animations from config
-    why::load_animations_from_config(nc, config);
+    when::load_animations_from_config(nc, config);
 
     bool running = true;
     const auto start_time = std::chrono::steady_clock::now();
@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
 
         plugin_manager.notify_frame(audio_metrics, dsp.band_energies(), dsp.beat_strength(), time_s);
 
-        why::render_frame(nc,
+        when::render_frame(nc,
                        time_s,
                        audio_metrics,
                        dsp.band_energies(),

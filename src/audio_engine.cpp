@@ -46,7 +46,7 @@ bool contains_ignore_case(std::string_view haystack, std::string_view needle) {
 
 } // namespace
 
-namespace why {
+namespace when {
 
 AudioEngine::FloatRingBuffer::FloatRingBuffer(std::size_t capacity)
     : buffer_(capacity), capacity_(capacity), head_(0), tail_(0) {}
@@ -427,5 +427,5 @@ void AudioEngine::file_stream_loop() {
     }
 }
 
-} // namespace why
+} // namespace when
 

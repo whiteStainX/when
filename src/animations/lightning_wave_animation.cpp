@@ -9,7 +9,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace why {
+namespace when {
 namespace animations {
 
 namespace {
@@ -440,4 +440,4 @@ void LightningWaveAnimation::bind_events(const AnimationConfig& config, events::
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when

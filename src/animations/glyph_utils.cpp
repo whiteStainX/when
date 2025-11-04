@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace why {
+namespace when {
 namespace animations {
 
 std::vector<std::string> parse_glyphs(const std::string& source) {
@@ -38,5 +38,5 @@ std::vector<std::string> parse_glyphs(const std::string& source) {
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when
 

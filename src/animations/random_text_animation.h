@@ -8,7 +8,7 @@
 #include "animation.h"
 #include "../config.h" // Explicitly include AppConfig
 
-namespace why {
+namespace when {
 namespace animations {
 
 class RandomTextAnimation : public Animation {
@@ -76,4 +76,4 @@ private:
 };
 
 } // namespace animations
-} // namespace why
+} // namespace when

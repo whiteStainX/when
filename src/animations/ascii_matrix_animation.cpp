@@ -8,7 +8,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace why {
+namespace when {
 namespace animations {
 
 namespace {
@@ -373,4 +373,4 @@ void AsciiMatrixAnimation::bind_events(const AnimationConfig& config, events::Ev
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when

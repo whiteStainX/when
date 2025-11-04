@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace why {
+namespace when {
 namespace events {
 
 class EventBus {
@@ -128,5 +128,5 @@ private:
 };
 
 } // namespace events
-} // namespace why
+} // namespace when
 

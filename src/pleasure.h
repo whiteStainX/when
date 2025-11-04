@@ -5,7 +5,7 @@
 
 #include "visualizer.h"
 
-namespace why {
+namespace when {
 
 struct PleasureConfig {
     std::size_t line_count = 10;
@@ -26,4 +26,4 @@ private:
     std::mt19937 rng_;
 };
 
-} // namespace why
+} // namespace when

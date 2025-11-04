@@ -7,7 +7,7 @@
 #include "config/raw_config.h"
 #include "config/value_parsers.h"
 
-namespace why {
+namespace when {
 namespace {
 
 using config::detail::RawConfig;
@@ -232,5 +232,5 @@ ConfigLoadResult load_app_config(const std::string& path) {
     return result;
 }
 
-} // namespace why
+} // namespace when
 

@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string_view>
 
-namespace why::config::detail {
+namespace when::config::detail {
 namespace {
 
 std::string ltrim(std::string_view sv) {
@@ -199,5 +199,5 @@ std::string sanitize_string_value(const std::string& value) {
     return trimmed;
 }
 
-} // namespace why::config::detail
+} // namespace when::config::detail
 

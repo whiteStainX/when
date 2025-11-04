@@ -12,7 +12,7 @@
 
 #include "../config/raw_config.h"
 
-namespace why {
+namespace when {
 namespace animations {
 
 void AnimationManager::load_animations(notcurses* nc, const AppConfig& app_config) {
@@ -86,5 +86,5 @@ void AnimationManager::render_all(notcurses* nc) {
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when
 

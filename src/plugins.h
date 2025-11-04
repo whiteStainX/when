@@ -9,7 +9,7 @@
 #include "audio_engine.h"
 #include "config.h"
 
-namespace why {
+namespace when {
 
 class Plugin {
 public:
@@ -43,5 +43,5 @@ private:
 
 void register_builtin_plugins(PluginManager& manager);
 
-} // namespace why
+} // namespace when
 

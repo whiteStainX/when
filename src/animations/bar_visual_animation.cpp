@@ -7,7 +7,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace why {
+namespace when {
 namespace animations {
 
 namespace {
@@ -259,4 +259,4 @@ void BarVisualAnimation::bind_events(const AnimationConfig& config, events::Even
     bind_standard_frame_updates(this, config, bus);
 }
 } // namespace animations
-} // namespace why
+} // namespace when

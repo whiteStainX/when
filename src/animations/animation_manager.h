@@ -11,7 +11,7 @@
 #include "../events/event_bus.h"
 #include "../events/frame_events.h"
 
-namespace why {
+namespace when {
 namespace animations {
 
 class AnimationManager {
@@ -40,5 +40,5 @@ private:
 };
 
 } // namespace animations
-} // namespace why
+} // namespace when
 

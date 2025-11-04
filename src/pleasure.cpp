@@ -10,7 +10,7 @@
 
 #include "dsp.h"
 
-namespace why {
+namespace when {
 
 PleasureVisualizer::PleasureVisualizer(PleasureConfig config)
     : config_(config)
@@ -160,4 +160,4 @@ void PleasureVisualizer::render(struct ncplane* plane, const DspEngine& dsp) {
     }
 }
 
-} // namespace why
+} // namespace when

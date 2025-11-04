@@ -8,7 +8,7 @@
 #include "animation.h"
 #include "../config.h"
 
-namespace why {
+namespace when {
 namespace animations {
 
 class BarVisualAnimation : public Animation {
@@ -48,4 +48,4 @@ private:
 };
 
 } // namespace animations
-} // namespace why
+} // namespace when

@@ -2,7 +2,7 @@
 
 struct ncplane;
 
-namespace why {
+namespace when {
 
 class DspEngine;
 
@@ -12,4 +12,4 @@ public:
     virtual void render(struct ncplane* plane, const DspEngine& dsp) = 0;
 };
 
-} // namespace why
+} // namespace when

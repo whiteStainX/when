@@ -9,7 +9,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace why {
+namespace when {
 namespace animations {
 
 namespace {
@@ -566,4 +566,4 @@ void CyberRainAnimation::bind_events(const AnimationConfig& config, events::Even
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when

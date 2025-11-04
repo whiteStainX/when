@@ -5,7 +5,7 @@
 #include "../events/frame_events.h"
 #include "animation.h"
 
-namespace why {
+namespace when {
 namespace animations {
 
 inline bool has_custom_triggers(const AnimationConfig& config) {
@@ -67,5 +67,5 @@ void bind_standard_frame_updates(AnimationT* animation,
 }
 
 } // namespace animations
-} // namespace why
+} // namespace when
 

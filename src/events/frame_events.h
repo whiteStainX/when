@@ -4,7 +4,7 @@
 
 #include "../audio_engine.h"
 
-namespace why {
+namespace when {
 namespace events {
 
 struct FrameUpdateEvent {
@@ -19,5 +19,5 @@ struct BeatDetectedEvent {
 };
 
 } // namespace events
-} // namespace why
+} // namespace when
 
