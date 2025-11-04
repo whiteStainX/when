@@ -48,7 +48,7 @@ uint32_t get_color(const toml::table& table, std::string_view key, uint32_t fall
     return fallback;
 }
 
-void populate_character_set(const toml::table& table, RainConfig& config) {
+void populate_character_set(const toml::table& table, PleasureConfig& config) {
     if (const auto* array = table["characterSet"].as_array()) {
         std::vector<char32_t> characters;
         characters.reserve(array->size());
@@ -69,7 +69,7 @@ void populate_character_set(const toml::table& table, RainConfig& config) {
     }
 }
 
-void load_rain_settings(const toml::table& table, RainConfig& config, const std::filesystem::path& root_path) {
+void load_pleasure_settings(const toml::table& table, PleasureConfig& config, const std::filesystem::path& root_path) {
     config.slantAngle = get_float(table, "slantAngle", config.slantAngle);
     config.duration = get_float(table, "duration", config.duration);
     config.minSpeed = get_float(table, "minSpeed", config.minSpeed);
@@ -92,7 +92,7 @@ void load_rain_settings(const toml::table& table, RainConfig& config, const std:
     populate_character_set(table, config);
 
     // Alternate naming for integrated effect configuration.
-    config.duration = get_float(table, "rain_duration", config.duration);
+    config.duration = get_float(table, "pleasure_duration", config.duration);
 }
 
 std::u32string utf8_to_u32(const std::string& input) {
@@ -108,7 +108,7 @@ std::u32string utf8_to_u32(const std::string& input) {
 
 SceneConfig load_scene_config_from_file(const std::filesystem::path& path) {
     SceneConfig sceneConfig{};
-    sceneConfig.rainAndConverge.rainConfig = sceneConfig.rain;
+    sceneConfig.pleasureAndConverge.pleasureConfig = sceneConfig.pleasure;
 
     std::error_code exists_error;
     if (!std::filesystem::exists(path, exists_error)) {
@@ -122,32 +122,32 @@ SceneConfig load_scene_config_from_file(const std::filesystem::path& path) {
 
         if (const auto* scene_table = table["scene"].as_table()) {
             if (const auto animation_value = (*scene_table)["animation"].value<std::string>()) {
-                if (*animation_value == "rain_and_converge") {
-                    sceneConfig.animation = AnimationType::RainAndConverge;
+                if (*animation_value == "pleasure_and_converge") {
+                    sceneConfig.animation = AnimationType::PleasureAndConverge;
                 } else {
-                    sceneConfig.animation = AnimationType::Rain;
+                    sceneConfig.animation = AnimationType::Pleasure;
                 }
             }
         }
 
-        if (sceneConfig.animation == AnimationType::RainAndConverge) {
-            if (const auto* rac_table = table["rain_and_converge"].as_table()) {
-                load_rain_settings(*rac_table, sceneConfig.rainAndConverge.rainConfig, path);
-                if (const auto title_value = (*rac_table)["title"].value<std::string>()) {
-                    sceneConfig.rainAndConverge.title = utf8_to_u32(*title_value);
+        if (sceneConfig.animation == AnimationType::PleasureAndConverge) {
+            if (const auto* pac_table = table["pleasure_and_converge"].as_table()) {
+                load_pleasure_settings(*pac_table, sceneConfig.pleasureAndConverge.pleasureConfig, path);
+                if (const auto title_value = (*pac_table)["title"].value<std::string>()) {
+                    sceneConfig.pleasureAndConverge.title = utf8_to_u32(*title_value);
                 }
-                sceneConfig.rainAndConverge.convergenceDuration = get_float(*rac_table, "convergence_duration", sceneConfig.rainAndConverge.convergenceDuration);
-                sceneConfig.rainAndConverge.convergenceRandomness = get_float(*rac_table, "convergence_randomness", sceneConfig.rainAndConverge.convergenceRandomness);
-                const int row_hint = get_int(*rac_table, "title_row", static_cast<int>(sceneConfig.rainAndConverge.titleRow));
+                sceneConfig.pleasureAndConverge.convergenceDuration = get_float(*pac_table, "convergence_duration", sceneConfig.pleasureAndConverge.convergenceDuration);
+                sceneConfig.pleasureAndConverge.convergenceRandomness = get_float(*pac_table, "convergence_randomness", sceneConfig.pleasureAndConverge.convergenceRandomness);
+                const int row_hint = get_int(*pac_table, "title_row", static_cast<int>(sceneConfig.pleasureAndConverge.titleRow));
                 if (row_hint > 0) {
-                    sceneConfig.rainAndConverge.titleRow = static_cast<unsigned int>(row_hint);
+                    sceneConfig.pleasureAndConverge.titleRow = static_cast<unsigned int>(row_hint);
                 }
             }
         } else {
             const toml::node_view effect = table["effect"];
             if (const auto* effect_table = effect.as_table()) {
-                if (const auto* rain_table = (*effect_table)["cyberrain"].as_table()) {
-                    load_rain_settings(*rain_table, sceneConfig.rain, path);
+                if (const auto* pleasure_table = (*effect_table)["pleasure"].as_table()) {
+                    load_pleasure_settings(*pleasure_table, sceneConfig.pleasure, path);
                 }
             }
         }
