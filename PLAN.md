@@ -38,22 +38,17 @@ This document outlines the phased development plan for the "when" music visualiz
 
 **Goal:** Refactor the rendering logic to calculate a precise, floating-point path for each line, including shaped peaks with randomness. This path will then be rendered using simple placeholder characters as a temporary validation step.
 
+**Status:** ✅ Completed
+
 **Steps:**
 
-1.  **Update `PleasureConfig`:** In `src/pleasure.h`, add new parameters to `PleasureConfig` to give us fine-grained control over the line's shape.
-    *   `peak_width_percent` (e.g., `0.5f`): A float controlling what percentage of the screen width the audio-reactive peak will occupy.
-    *   `randomness_factor` (e.g., `0.2f`): A float controlling how much the peak's center can randomly shift left or right.
-
-2.  **Refactor `PleasureVisualizer::render`:** The core of this phase is to change the rendering logic from a single vertical offset to a per-pixel calculation.
-    a.  **Remove Old Logic:** Delete the current code that calculates a single average magnitude and draws a full line with `ncplane_putstr_yx`.
-    b.  **Per-Line Calculation:** The main loop will still iterate through each line to be drawn.
-    c.  **Calculate Peak Position:** For each line, determine the horizontal range of its audio-reactive peak.
-        i.  Calculate a random horizontal offset based on `randomness_factor`.
-        ii. Use this offset and `peak_width_percent` to find the `start_x` and `end_x` screen coordinates for the peak.
-    d.  **Generate Precise Path:** For each line, iterate through every horizontal column `x` of the screen (`0` to `dimx - 1`):
-        i.  **For `x` outside the peak (`x < start_x` or `x > end_x`):** The line is flat. The vertical position is simply its `base_y`.
-        ii. **For `x` inside the peak:** Map the frequency bins from the `DspEngine` to this segment of the line. Calculate the displacement based on the audio magnitude at that point. To create a smooth peak instead of a block, apply a shaping function (like a triangle or a smooth bell curve) to the magnitudes across the peak's width. The final vertical position will be `base_y - displacement`.
-    e.  **Render Placeholder:** After calculating the precise `y` coordinate for a given `x`, **round it to the nearest integer** and use `ncplane_putchar_yx` to draw a single `#` character at that `(x, rounded_y)` position.
+- [x] **Update `PleasureConfig`:** Extend `src/pleasure.h` with peak shaping controls (`peak_width_percent`, `randomness_factor`) so the visual can be tuned without touching the renderer.
+- [x] **Refactor `PleasureVisualizer::render`:** Replace the single-offset renderer with a per-column path generator.
+    - [x] Sample audio bands across each peak segment using linear interpolation so neighbouring bins create smooth slopes.
+    - [x] Apply a symmetric triangular envelope (peaks taper toward the edges) and scale by `amplitude_scale` to produce the displacement for each column inside the peak.
+    - [x] Keep the off-peak columns flat at the base height, ensuring the whole waveform stays centered horizontally.
+- [x] **Render Placeholder:** Round the floating-point path to the nearest terminal row and place individual `#` glyphs with `ncplane_putchar_yx` as a temporary visualization.
+- [x] **Centering:** Base line origins around the plane midpoint so the visualization is centered vertically, and compute peak centers relative to the screen midpoint (plus configurable randomness) for horizontal centering.
 
 ## Phase 3: Braille Rendering
 
