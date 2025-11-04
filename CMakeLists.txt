@@ -27,13 +27,7 @@ set(WHEN_SOURCES
   src/plugins.cpp
   src/renderer.cpp
   src/dsp.cpp
-  src/animations/random_text_animation.cpp
-  src/animations/bar_visual_animation.cpp
   src/animations/ascii_matrix_animation.cpp
-  src/animations/cyber_rain_animation.cpp
-  src/animations/lightning_wave_animation.cpp
-  src/animations/breathe_animation.cpp
-  src/animations/logging_animation.cpp
   src/animations/animation_manager.cpp
   src/animations/glyph_utils.cpp
   external/kissfft/kiss_fft.c
