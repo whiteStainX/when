@@ -2,9 +2,13 @@
 
 #include <algorithm>
 #include <cctype>
-#include <fstream>
+#include <cstdint>
+#include <filesystem>
 #include <sstream>
 #include <string_view>
+#include <utility>
+
+#include <toml.hpp>
 
 namespace when::config::detail {
 namespace {
@@ -29,151 +33,111 @@ std::string trim(std::string_view sv) {
     return rtrim(ltrim(sv));
 }
 
-std::string strip_inline_comment(const std::string& value) {
-    bool in_quotes = false;
-    char quote_char = '\0';
-    for (std::size_t i = 0; i < value.size(); ++i) {
-        const char c = value[i];
-        if ((c == '\"' || c == '\'') && (i == 0 || value[i - 1] != '\\')) {
-            if (!in_quotes) {
-                in_quotes = true;
-                quote_char = c;
-            } else if (quote_char == c) {
-                in_quotes = false;
-            }
-        }
-        if (c == '#' && !in_quotes) {
-            return trim(value.substr(0, i));
-        }
-    }
-    return trim(value);
+int node_line(const toml::node& node) {
+    const toml::source_region& src = node.source();
+    return static_cast<int>(src.begin.line);
 }
 
-std::vector<std::string> parse_array_values(const std::string& raw,
-                                            int line,
-                                            std::vector<std::string>& warnings) {
-    std::vector<std::string> values;
-    std::string current;
-    bool in_quotes = false;
-    char quote_char = '\0';
-    for (std::size_t i = 0; i < raw.size(); ++i) {
-        const char c = raw[i];
-        if (in_quotes) {
-            if (c == quote_char && (i == 0 || raw[i - 1] != '\\')) {
-                in_quotes = false;
-            } else {
-                current.push_back(c);
-            }
-            continue;
-        }
-        if (c == '\"' || c == '\'') {
-            in_quotes = true;
-            quote_char = c;
-            continue;
-        }
-        if (c == ',') {
-            std::string value = trim(current);
-            if (!value.empty()) {
-                values.push_back(value);
-            }
-            current.clear();
-            continue;
-        }
-        if (!std::isspace(static_cast<unsigned char>(c))) {
-            current.push_back(c);
-        }
+std::string node_to_string(const toml::node& node) {
+    if (auto value = node.value<std::string>()) {
+        return *value;
     }
-    std::string value = trim(current);
-    if (!value.empty()) {
-        values.push_back(value);
+    if (auto value = node.value<bool>()) {
+        return *value ? "true" : "false";
     }
-    if (in_quotes) {
+    if (auto value = node.value<std::int64_t>()) {
+        return std::to_string(*value);
+    }
+    if (auto value = node.value<double>()) {
         std::ostringstream oss;
-        oss << "Unterminated string in array on line " << line;
-        warnings.push_back(oss.str());
+        oss << *value;
+        return oss.str();
     }
-    for (std::string& v : values) {
-        if (!v.empty() && v.front() == '\"' && v.back() == '\"' && v.size() >= 2) {
-            v = v.substr(1, v.size() - 2);
-        } else if (!v.empty() && v.front() == '\'' && v.back() == '\'' && v.size() >= 2) {
-            v = v.substr(1, v.size() - 2);
-        }
+    if (auto value = node.value<toml::date>()) {
+        std::ostringstream oss;
+        oss << *value;
+        return oss.str();
     }
-    return values;
+    if (auto value = node.value<toml::time>()) {
+        std::ostringstream oss;
+        oss << *value;
+        return oss.str();
+    }
+    if (auto value = node.value<toml::date_time>()) {
+        std::ostringstream oss;
+        oss << *value;
+        return oss.str();
+    }
+    std::ostringstream oss;
+    oss << toml::default_formatter{node};
+    return oss.str();
 }
 
-void parse_file(const std::string& path,
-                RawConfig& out,
-                std::vector<std::string>& warnings,
-                bool& loaded_file) {
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        return;
-    }
-    loaded_file = true;
-
-    std::string line;
-    std::string current_section;
-    std::unordered_map<std::string, RawScalar>* current_animation_map = nullptr;
-    int line_number = 0;
-    while (std::getline(file, line)) {
-        ++line_number;
-        std::string trimmed = trim(line);
-        if (trimmed.empty() || trimmed[0] == '#') {
-            continue;
-        }
-
-        if (trimmed.front() == '[' && trimmed.back() == ']') {
-            if (trimmed.front() == '[' && trimmed.at(1) == '[' && trimmed.back() == ']' &&
-                trimmed.at(trimmed.size() - 2) == ']') {
-                std::string array_name = trim(trimmed.substr(2, trimmed.size() - 4));
-                if (array_name == "animations") {
-                    out.animation_configs.emplace_back();
-                    current_animation_map = &out.animation_configs.back();
-                } else {
-                    current_animation_map = nullptr;
-                }
-                current_section.clear();
-            } else {
-                current_section = trim(trimmed.substr(1, trimmed.size() - 2));
-                current_animation_map = nullptr;
+void append_animation_configs(const toml::array& array,
+                              RawConfig& out,
+                              std::vector<std::string>& warnings) {
+    for (const toml::node& element : array) {
+        if (const auto* table = element.as_table()) {
+            std::unordered_map<std::string, RawScalar> anim_map;
+            for (const auto& [key, value] : *table) {
+                RawScalar scalar;
+                scalar.value = node_to_string(value);
+                scalar.line = node_line(value);
+                anim_map.emplace(key.str(), std::move(scalar));
             }
-            continue;
-        }
-
-        const std::size_t eq = trimmed.find('=');
-        if (eq == std::string::npos) {
+            out.animation_configs.push_back(std::move(anim_map));
+        } else {
             std::ostringstream oss;
-            oss << "Ignoring line " << line_number << ": missing '='";
+            oss << "Invalid animation entry type at line " << node_line(element);
+            warnings.push_back(oss.str());
+        }
+    }
+}
+
+void append_array_values(const std::string& key,
+                         const toml::array& array,
+                         RawConfig& out,
+                         std::vector<std::string>& warnings) {
+    RawArray raw_array;
+    raw_array.line = array.source().begin.line;
+    for (const toml::node& value : array) {
+        if (value.is_array() || value.is_table()) {
+            std::ostringstream oss;
+            oss << "Unsupported nested value in array '" << key << "' at line " << node_line(value);
             warnings.push_back(oss.str());
             continue;
         }
-        std::string key = trim(trimmed.substr(0, eq));
-        std::string value = strip_inline_comment(trimmed.substr(eq + 1));
+        raw_array.values.push_back(node_to_string(value));
+    }
+    out.arrays[key] = std::move(raw_array);
+}
 
-        if (current_animation_map) {
-            RawScalar scalar;
-            scalar.value = value;
-            scalar.line = line_number;
-            (*current_animation_map)[key] = scalar;
-        } else {
-            std::string full_key = key;
-            if (!current_section.empty()) {
-                full_key = current_section + "." + key;
-            }
-            if (value.size() >= 2 && value.front() == '[' && value.back() == ']') {
-                std::string inner = trim(value.substr(1, value.size() - 2));
-                RawArray array;
-                array.values = parse_array_values(inner, line_number, warnings);
-                array.line = line_number;
-                out.arrays[full_key] = array;
-            } else {
-                RawScalar scalar;
-                scalar.value = value;
-                scalar.line = line_number;
-                out.scalars[full_key] = scalar;
-            }
+void flatten_table(const toml::table& table,
+                   const std::string& prefix,
+                   RawConfig& out,
+                   std::vector<std::string>& warnings) {
+    for (const auto& [key, value] : table) {
+        const std::string key_str = std::string{key.str()};
+        const std::string full_key = prefix.empty() ? key_str : prefix + '.' + key_str;
+
+        if (const auto* child_table = value.as_table()) {
+            flatten_table(*child_table, full_key, out, warnings);
+            continue;
         }
+
+        if (const auto* array = value.as_array()) {
+            if (full_key == "animations") {
+                append_animation_configs(*array, out, warnings);
+            } else {
+                append_array_values(full_key, *array, out, warnings);
+            }
+            continue;
+        }
+
+        RawScalar scalar;
+        scalar.value = node_to_string(value);
+        scalar.line = node_line(value);
+        out.scalars[full_key] = std::move(scalar);
     }
 }
 
@@ -183,7 +147,24 @@ RawConfig parse_raw_config(const std::string& path,
                            std::vector<std::string>& warnings,
                            bool& loaded_file) {
     RawConfig raw;
-    parse_file(path, raw, warnings, loaded_file);
+
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) {
+        return raw;
+    }
+
+    try {
+        toml::table parsed = toml::parse_file(path);
+        loaded_file = true;
+        flatten_table(parsed, std::string{}, raw, warnings);
+    } catch (const toml::parse_error& err) {
+        std::ostringstream oss;
+        oss << "Failed to parse '" << path << "': " << err.description()
+            << " (line " << err.source().begin.line
+            << ", column " << err.source().begin.column << ")";
+        warnings.push_back(oss.str());
+    }
+
     return raw;
 }
 

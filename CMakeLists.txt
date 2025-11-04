@@ -34,6 +34,8 @@ set(WHEN_SOURCES
   src/animations/lightning_wave_animation.cpp
   src/animations/breathe_animation.cpp
   src/animations/logging_animation.cpp
+  src/animations/animation_manager.cpp
+  src/animations/glyph_utils.cpp
   external/kissfft/kiss_fft.c
 )
 

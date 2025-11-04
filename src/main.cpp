@@ -8,6 +8,8 @@
 #include <thread>
 #include <vector>
 
+#include <cxxopts.hpp>
+
 #include "audio_engine.h"
 #include "config.h"
 #include "dsp.h"
@@ -18,35 +20,51 @@
 int main(int argc, char** argv) {
     std::setlocale(LC_ALL, "");
 
-    std::string config_path = "when.toml";
+    cxxopts::Options options("when", "Audio visualiser");
+    options.add_options()
+        ("c,config", "Path to configuration file", cxxopts::value<std::string>()->default_value("when.toml"))
+        ("f,file", "Audio file to play", cxxopts::value<std::string>())
+        ("d,device", "Audio input device override", cxxopts::value<std::string>())
+        ("system", "Force system audio capture")
+        ("mic", "Force microphone capture")
+        ("h,help", "Print usage");
+
+    std::string config_path;
     std::string file_path;
     std::string device_name_override;
     int system_override = -1; // -1 = use config, 0 = mic, 1 = system
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if ((arg == "--config" || arg == "-c") && i + 1 < argc) {
-            config_path = argv[i + 1];
-            ++i;
-            continue;
+
+    try {
+        const auto result = options.parse(argc, argv);
+
+        if (result.count("help")) {
+            std::cout << options.help() << std::endl;
+            return 0;
         }
-        if ((arg == "--file" || arg == "-f") && i + 1 < argc) {
-            file_path = argv[i + 1];
-            ++i;
-            continue;
+
+        config_path = result["config"].as<std::string>();
+
+        if (result.count("file")) {
+            file_path = result["file"].as<std::string>();
         }
-        if ((arg == "--device" || arg == "-d") && i + 1 < argc) {
-            device_name_override = argv[i + 1];
-            ++i;
-            continue;
+
+        if (result.count("device")) {
+            device_name_override = result["device"].as<std::string>();
         }
-        if (arg == "--system") {
+
+        if (result.count("system") && result.count("mic")) {
+            std::cerr << "Cannot specify both --system and --mic" << std::endl;
+            return 1;
+        }
+        if (result.count("system")) {
             system_override = 1;
-            continue;
-        }
-        if (arg == "--mic") {
+        } else if (result.count("mic")) {
             system_override = 0;
-            continue;
         }
+    } catch (const cxxopts::exceptions::exception& ex) {
+        std::cerr << ex.what() << std::endl;
+        std::cerr << options.help() << std::endl;
+        return 1;
     }
 
     const when::ConfigLoadResult config_result = when::load_app_config(config_path);
