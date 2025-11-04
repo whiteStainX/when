@@ -33,6 +33,21 @@ public:
 
 private:
     void create_or_resize_plane(notcurses* nc);
+    void draw_line(std::vector<uint8_t>& cells,
+                   unsigned int cell_rows,
+                   unsigned int cell_cols,
+                   int y1,
+                   int x1,
+                   int y2,
+                   int x2);
+    void set_braille_pixel(std::vector<uint8_t>& cells,
+                           unsigned int cell_cols,
+                           int y,
+                           int x) const;
+    void blit_braille_cells(ncplane* plane,
+                            const std::vector<uint8_t>& cells,
+                            unsigned int cell_rows,
+                            unsigned int cell_cols) const;
 
     ncplane* plane_ = nullptr;
     int z_index_ = 0;
