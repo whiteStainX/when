@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ncmatrix LANGUAGES C CXX)
+project(when LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,12 +16,15 @@ endif()
 # --- sources ---
 set(WHEN_SOURCES
   src/ConfigLoader.cpp
+  src/audio_engine.cpp
+  src/dsp.cpp
   src/main.cpp
+  external/kissfft/kiss_fft.c
 )
 
 add_executable(when ${WHEN_SOURCES})
 
-# Add a custom target to track changes in why.toml
+# Add a custom target to track changes in when.toml
 add_custom_target(config_dependency ALL DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/when.toml)
 add_dependencies(when config_dependency)
 
