@@ -17,6 +17,7 @@ endif()
 set(WHEN_SOURCES
   src/ConfigLoader.cpp
   src/audio_engine.cpp
+  src/pleasure.cpp
   src/dsp.cpp
   src/main.cpp
   external/kissfft/kiss_fft.c
