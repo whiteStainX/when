@@ -32,6 +32,11 @@ constexpr float kRidgeIntervalMin = 0.35f;
 constexpr float kRidgeIntervalMax = 0.75f;
 constexpr int kMinRidges = 3;
 constexpr int kMaxRidges = 5;
+constexpr int kLineSpacing = 3;
+constexpr int kMaxLines = 32;
+constexpr int kBaselineMargin = 4;
+constexpr int kMaxUpwardExcursion = 28;
+constexpr int kMaxDownwardExcursion = 6;
 } // namespace
 
 PleasureAnimation::PleasureAnimation()
@@ -123,7 +128,7 @@ void PleasureAnimation::update(float delta_time,
                                const AudioMetrics& /*metrics*/,
                                const std::vector<float>& bands,
                                float /*beat_strength*/) {
-    if (history_capacity_ < 2u) {
+    if (history_capacity_ < 2u || lines_.empty()) {
         return;
     }
 
@@ -150,44 +155,62 @@ void PleasureAnimation::update(float delta_time,
     const float center_band_start = 0.5f - kCenterBandWidth * 0.5f;
     const float center_band_end = 0.5f + kCenterBandWidth * 0.5f;
 
-    for (auto& ridge : ridges_) {
-        ridge.noise_timer += delta_time;
-        if (ridge.noise_timer >= ridge.noise_interval) {
-            const float jitter = random_between(-kRidgePositionJitter, kRidgePositionJitter);
-            ridge.target_pos = std::clamp(ridge.target_pos + jitter, center_band_start, center_band_end);
-
-            const float magnitude_jitter = 1.0f + random_between(-kRidgeMagnitudeJitter, kRidgeMagnitudeJitter);
-            ridge.target_magnitude = std::clamp(global_magnitude_ * magnitude_jitter, 0.0f, 1.0f);
-
-            ridge.noise_timer = 0.0f;
-            ridge.noise_interval = random_between(kRidgeIntervalMin, kRidgeIntervalMax);
-        }
-
-        ridge.current_pos += (ridge.target_pos - ridge.current_pos) * kRidgePositionSmoothing;
-        ridge.current_magnitude += (ridge.target_magnitude - ridge.current_magnitude) * kRidgeMagnitudeSmoothing;
-    }
-
-    if (history_capacity_ == 0u || line_profile_.size() != history_capacity_) {
-        line_profile_.assign(history_capacity_, 0.0f);
-    }
-
-    const float base_level = global_magnitude_ * 0.08f;
     const float two_sigma_sq = 2.0f * kRidgeSigma * kRidgeSigma;
 
-    for (std::size_t i = 0; i < history_capacity_; ++i) {
-        const float x_norm = (history_capacity_ > 1u)
-                                 ? static_cast<float>(i) / static_cast<float>(history_capacity_ - 1u)
-                                 : 0.0f;
+    for (std::size_t line_index = 0; line_index < lines_.size(); ++line_index) {
+        auto& line = lines_[line_index];
 
-        float ridge_sum = 0.0f;
-        for (const auto& ridge : ridges_) {
-            const float dx = x_norm - ridge.current_pos;
-            const float gaussian = std::exp(-(dx * dx) / std::max(two_sigma_sq, 1e-6f));
-            ridge_sum += ridge.current_magnitude * gaussian;
+        if (line.ridges.empty()) {
+            initialize_line(line);
         }
 
-        const float target_value = std::clamp(base_level + ridge_sum, 0.0f, 1.0f);
-        line_profile_[i] += (target_value - line_profile_[i]) * kProfileSmoothing;
+        const float depth = (lines_.size() > 1u)
+                                ? static_cast<float>(line_index) /
+                                      static_cast<float>(lines_.size() - 1u)
+                                : 0.0f;
+        const float depth_scale = 1.0f - depth * 0.45f;
+
+        for (auto& ridge : line.ridges) {
+            ridge.noise_timer += delta_time;
+            if (ridge.noise_timer >= ridge.noise_interval) {
+                const float jitter = random_between(-kRidgePositionJitter, kRidgePositionJitter);
+                ridge.target_pos = std::clamp(ridge.target_pos + jitter, center_band_start, center_band_end);
+
+                const float magnitude_jitter = 1.0f + random_between(-kRidgeMagnitudeJitter, kRidgeMagnitudeJitter);
+                ridge.target_magnitude = std::clamp(global_magnitude_ * magnitude_jitter * depth_scale,
+                                                    0.0f,
+                                                    1.0f);
+
+                ridge.noise_timer = 0.0f;
+                ridge.noise_interval = random_between(kRidgeIntervalMin, kRidgeIntervalMax);
+            }
+
+            ridge.current_pos += (ridge.target_pos - ridge.current_pos) * kRidgePositionSmoothing;
+            ridge.current_magnitude += (ridge.target_magnitude - ridge.current_magnitude) *
+                                       kRidgeMagnitudeSmoothing;
+        }
+
+        if (line.line_profile.size() != history_capacity_) {
+            line.line_profile.assign(history_capacity_, 0.5f);
+        }
+
+        const float base_level = global_magnitude_ * 0.08f * (0.6f + 0.4f * depth_scale);
+
+        for (std::size_t i = 0; i < history_capacity_; ++i) {
+            const float x_norm = (history_capacity_ > 1u)
+                                     ? static_cast<float>(i) / static_cast<float>(history_capacity_ - 1u)
+                                     : 0.0f;
+
+            float ridge_sum = 0.0f;
+            for (const auto& ridge : line.ridges) {
+                const float dx = x_norm - ridge.current_pos;
+                const float gaussian = std::exp(-(dx * dx) / std::max(two_sigma_sq, 1e-6f));
+                ridge_sum += ridge.current_magnitude * gaussian;
+            }
+
+            const float target_value = std::clamp(base_level + ridge_sum * depth_scale, 0.0f, 1.0f);
+            line.line_profile[i] += (target_value - line.line_profile[i]) * kProfileSmoothing;
+        }
     }
 }
 
@@ -212,42 +235,61 @@ void PleasureAnimation::render(notcurses* /*nc*/) {
         return;
     }
 
-    std::vector<uint8_t> braille_cells(rows * cols, 0);
-
-    const std::size_t profile_size = line_profile_.size();
-    if (profile_size < 2u) {
+    if (lines_.empty()) {
         return;
     }
 
-    const float max_index = static_cast<float>(profile_size - 1u);
+    std::vector<uint8_t> braille_cells(rows * cols, 0);
+    std::vector<int> skyline_buffer(static_cast<std::size_t>(pixel_cols), pixel_rows);
+
     const float max_x = static_cast<float>(pixel_cols - 1);
 
-    const int baseline = pixel_rows / 2;
-    const int amplitude_range = std::max(1, std::min(baseline, pixel_rows - 1 - baseline));
+    for (std::size_t line_index = 0; line_index < lines_.size(); ++line_index) {
+        const auto& line = lines_[line_index];
+        const std::size_t profile_size = line.line_profile.size();
+        if (profile_size < 2u) {
+            continue;
+        }
 
-    for (std::size_t j = 0; j + 1 < profile_size; ++j) {
-        const float sample_a = std::clamp(line_profile_[j], 0.0f, 1.0f);
-        const float sample_b = std::clamp(line_profile_[j + 1], 0.0f, 1.0f);
+        const float max_index = static_cast<float>(profile_size - 1u);
+        const int base_y = pixel_rows - 1 - static_cast<int>(line_index) * kLineSpacing - kBaselineMargin;
+        if (base_y < 0) {
+            break;
+        }
 
-        const float centered_a = sample_a * 2.0f - 1.0f;
-        const float centered_b = sample_b * 2.0f - 1.0f;
+        const int upward_range = std::max(1, std::min(kMaxUpwardExcursion, std::max(0, base_y)));
+        const int downward_range = std::min(kMaxDownwardExcursion, std::max(0, pixel_rows - 1 - base_y));
 
-        int y1 = baseline - static_cast<int>(std::lround(centered_a * amplitude_range));
-        int y2 = baseline - static_cast<int>(std::lround(centered_b * amplitude_range));
+        for (std::size_t j = 0; j + 1 < profile_size; ++j) {
+            const float sample_a = std::clamp(line.line_profile[j], 0.0f, 1.0f);
+            const float sample_b = std::clamp(line.line_profile[j + 1], 0.0f, 1.0f);
 
-        y1 = std::clamp(y1, 0, pixel_rows - 1);
-        y2 = std::clamp(y2, 0, pixel_rows - 1);
+            const float centered_a = sample_a * 2.0f - 1.0f;
+            const float centered_b = sample_b * 2.0f - 1.0f;
 
-        const float x_norm_a = static_cast<float>(j) / std::max(1.0f, max_index);
-        const float x_norm_b = static_cast<float>(j + 1u) / std::max(1.0f, max_index);
+            const auto map_to_y = [&](float centered_value) {
+                if (centered_value >= 0.0f) {
+                    const int offset = static_cast<int>(std::lround(centered_value * upward_range));
+                    return base_y - offset;
+                }
+                const int offset = static_cast<int>(std::lround(-centered_value * downward_range));
+                return base_y + offset;
+            };
 
-        int x1 = static_cast<int>(std::lround(x_norm_a * max_x));
-        int x2 = static_cast<int>(std::lround(x_norm_b * max_x));
+            int y1 = std::clamp(map_to_y(centered_a), 0, pixel_rows - 1);
+            int y2 = std::clamp(map_to_y(centered_b), 0, pixel_rows - 1);
 
-        x1 = std::clamp(x1, 0, pixel_cols - 1);
-        x2 = std::clamp(x2, 0, pixel_cols - 1);
+            const float x_norm_a = static_cast<float>(j) / std::max(1.0f, max_index);
+            const float x_norm_b = static_cast<float>(j + 1u) / std::max(1.0f, max_index);
 
-        draw_line(braille_cells, rows, cols, y1, x1, y2, x2);
+            int x1 = static_cast<int>(std::lround(x_norm_a * max_x));
+            int x2 = static_cast<int>(std::lround(x_norm_b * max_x));
+
+            x1 = std::clamp(x1, 0, pixel_cols - 1);
+            x2 = std::clamp(x2, 0, pixel_cols - 1);
+
+            draw_occluded_line(braille_cells, rows, cols, y1, x1, y2, x2, skyline_buffer);
+        }
     }
 
     blit_braille_cells(plane_, braille_cells, rows, cols);
@@ -268,8 +310,36 @@ void PleasureAnimation::bind_events(const AnimationConfig& config, events::Event
     bind_standard_frame_updates(this, config, bus);
 }
 
-void PleasureAnimation::initialize_ridges() {
-    ridges_.clear();
+void PleasureAnimation::initialize_line_states() {
+    lines_.clear();
+
+    if (!plane_ || history_capacity_ < 2u) {
+        return;
+    }
+
+    const int pixel_rows = static_cast<int>(plane_rows_) * kBrailleRowsPerCell;
+    if (pixel_rows <= 0) {
+        return;
+    }
+
+    const int available_height = pixel_rows - 1 - kBaselineMargin;
+    if (available_height < 0) {
+        return;
+    }
+
+    const int max_lines = (available_height / kLineSpacing) + 1;
+    const int desired_lines = std::max(1, std::min(kMaxLines, max_lines));
+
+    lines_.resize(static_cast<std::size_t>(desired_lines));
+    for (auto& line : lines_) {
+        line.line_profile.assign(history_capacity_, 0.5f);
+        line.ridges.clear();
+        initialize_line(line);
+    }
+}
+
+void PleasureAnimation::initialize_line(LineState& line_state) {
+    line_state.ridges.clear();
 
     if (history_capacity_ < 2u) {
         return;
@@ -283,14 +353,14 @@ void PleasureAnimation::initialize_ridges() {
 
     for (int i = 0; i < ridge_count; ++i) {
         const float pos = random_between(center_band_start, center_band_end);
-        PleasureAnimation::RidgeState ridge{};
+        RidgeState ridge{};
         ridge.current_pos = pos;
         ridge.target_pos = pos;
         ridge.current_magnitude = 0.0f;
         ridge.target_magnitude = 0.0f;
         ridge.noise_timer = random_between(0.0f, kRidgeIntervalMin);
         ridge.noise_interval = random_between(kRidgeIntervalMin, kRidgeIntervalMax);
-        ridges_.push_back(ridge);
+        line_state.ridges.push_back(ridge);
     }
 }
 
@@ -302,13 +372,14 @@ float PleasureAnimation::random_between(float min_value, float max_value) {
     return dist(rng_);
 }
 
-void PleasureAnimation::draw_line(std::vector<uint8_t>& cells,
-                                  unsigned int cell_rows,
-                                  unsigned int cell_cols,
-                                  int y1,
-                                  int x1,
-                                  int y2,
-                                  int x2) {
+void PleasureAnimation::draw_occluded_line(std::vector<uint8_t>& cells,
+                                           unsigned int cell_rows,
+                                           unsigned int cell_cols,
+                                           int y1,
+                                           int x1,
+                                           int y2,
+                                           int x2,
+                                           std::vector<int>& skyline_buffer) {
     if (cells.empty() || cell_rows == 0u || cell_cols == 0u) {
         return;
     }
@@ -317,6 +388,10 @@ void PleasureAnimation::draw_line(std::vector<uint8_t>& cells,
     const int pixel_cols = static_cast<int>(cell_cols) * kBrailleColsPerCell;
     if (pixel_rows <= 0 || pixel_cols <= 0) {
         return;
+    }
+
+    if (skyline_buffer.size() != static_cast<std::size_t>(pixel_cols)) {
+        skyline_buffer.assign(static_cast<std::size_t>(pixel_cols), pixel_rows);
     }
 
     auto clamp_coord = [](int value, int max_value) {
@@ -347,7 +422,11 @@ void PleasureAnimation::draw_line(std::vector<uint8_t>& cells,
 
     while (true) {
         if (x >= 0 && x < pixel_cols && y >= 0 && y < pixel_rows) {
-            set_braille_pixel(cells, cell_cols, y, x);
+            const std::size_t skyline_index = static_cast<std::size_t>(x);
+            if (skyline_index < skyline_buffer.size() && y < skyline_buffer[skyline_index]) {
+                skyline_buffer[skyline_index] = y;
+                set_braille_pixel(cells, cell_cols, y, x);
+            }
         }
 
         if (x == x2 && y == y2) {
@@ -461,8 +540,7 @@ void PleasureAnimation::configure_history_capacity() {
         history_capacity_ = std::max<std::size_t>(2u, pixel_cols);
     }
 
-    line_profile_.assign(history_capacity_, 0.0f);
-    initialize_ridges();
+    initialize_line_states();
 }
 
 } // namespace animations
