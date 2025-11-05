@@ -18,25 +18,6 @@ constexpr unsigned int kDefaultPlaneRows = 24;
 constexpr unsigned int kDefaultPlaneCols = 48;
 constexpr int kBrailleRowsPerCell = 4;
 constexpr int kBrailleColsPerCell = 2;
-constexpr float kMagnitudeScale = 4.5f;
-constexpr float kHistorySmoothing = 0.2f;
-constexpr float kGlobalEnvelopeSmoothing = 0.08f;
-constexpr float kProfileSmoothing = 0.25f;
-constexpr float kRidgeMagnitudeSmoothing = 0.18f;
-constexpr float kRidgePositionSmoothing = 0.12f;
-constexpr float kCenterBandWidth = 0.38f;
-constexpr float kRidgeSigma = 0.035f;
-constexpr float kRidgePositionJitter = 0.045f;
-constexpr float kRidgeMagnitudeJitter = 0.35f;
-constexpr float kRidgeIntervalMin = 0.35f;
-constexpr float kRidgeIntervalMax = 0.75f;
-constexpr int kMinRidges = 3;
-constexpr int kMaxRidges = 5;
-constexpr int kLineSpacing = 3;
-constexpr int kMaxLines = 32;
-constexpr int kBaselineMargin = 4;
-constexpr int kMaxUpwardExcursion = 28;
-constexpr int kMaxDownwardExcursion = 6;
 } // namespace
 
 PleasureAnimation::PleasureAnimation()
@@ -57,6 +38,7 @@ void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
 
     z_index_ = 0;
     is_active_ = true;
+    params_ = PleasureParameters{};
 
     unsigned int desired_rows = kDefaultPlaneRows;
     unsigned int desired_cols = kDefaultPlaneCols;
@@ -69,6 +51,7 @@ void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
         if (anim_config.type == "Pleasure") {
             z_index_ = anim_config.z_index;
             is_active_ = anim_config.initially_active;
+            load_parameters_from_config(anim_config);
 
             if (anim_config.plane_rows) {
                 desired_rows = std::max(1, *anim_config.plane_rows);
@@ -145,17 +128,19 @@ void PleasureAnimation::update(float delta_time,
         }
     }
 
-    const float smoothed = (1.0f - kHistorySmoothing) * last_magnitude_ +
-                           kHistorySmoothing * magnitude;
+    const float history_smoothing = params_.history_smoothing;
+    const float smoothed = (1.0f - history_smoothing) * last_magnitude_ +
+                           history_smoothing * magnitude;
     last_magnitude_ = smoothed;
 
-    const float normalized_magnitude = std::clamp(smoothed * kMagnitudeScale, 0.0f, 1.0f);
-    global_magnitude_ += (normalized_magnitude - global_magnitude_) * kGlobalEnvelopeSmoothing;
+    const float normalized_magnitude = std::clamp(smoothed * params_.magnitude_scale, 0.0f, 1.0f);
+    global_magnitude_ +=
+        (normalized_magnitude - global_magnitude_) * params_.global_envelope_smoothing;
 
-    const float center_band_start = 0.5f - kCenterBandWidth * 0.5f;
-    const float center_band_end = 0.5f + kCenterBandWidth * 0.5f;
+    const float center_band_start = 0.5f - params_.center_band_width * 0.5f;
+    const float center_band_end = 0.5f + params_.center_band_width * 0.5f;
 
-    const float two_sigma_sq = 2.0f * kRidgeSigma * kRidgeSigma;
+    const float two_sigma_sq = 2.0f * params_.ridge_sigma * params_.ridge_sigma;
 
     for (std::size_t line_index = 0; line_index < lines_.size(); ++line_index) {
         auto& line = lines_[line_index];
@@ -173,21 +158,24 @@ void PleasureAnimation::update(float delta_time,
         for (auto& ridge : line.ridges) {
             ridge.noise_timer += delta_time;
             if (ridge.noise_timer >= ridge.noise_interval) {
-                const float jitter = random_between(-kRidgePositionJitter, kRidgePositionJitter);
+                const float jitter =
+                    random_between(-params_.ridge_position_jitter, params_.ridge_position_jitter);
                 ridge.target_pos = std::clamp(ridge.target_pos + jitter, center_band_start, center_band_end);
 
-                const float magnitude_jitter = 1.0f + random_between(-kRidgeMagnitudeJitter, kRidgeMagnitudeJitter);
+                const float magnitude_jitter =
+                    1.0f + random_between(-params_.ridge_magnitude_jitter, params_.ridge_magnitude_jitter);
                 ridge.target_magnitude = std::clamp(global_magnitude_ * magnitude_jitter * depth_scale,
                                                     0.0f,
                                                     1.0f);
 
                 ridge.noise_timer = 0.0f;
-                ridge.noise_interval = random_between(kRidgeIntervalMin, kRidgeIntervalMax);
+                ridge.noise_interval =
+                    random_between(params_.ridge_interval_min, params_.ridge_interval_max);
             }
 
-            ridge.current_pos += (ridge.target_pos - ridge.current_pos) * kRidgePositionSmoothing;
+            ridge.current_pos += (ridge.target_pos - ridge.current_pos) * params_.ridge_position_smoothing;
             ridge.current_magnitude += (ridge.target_magnitude - ridge.current_magnitude) *
-                                       kRidgeMagnitudeSmoothing;
+                                       params_.ridge_magnitude_smoothing;
         }
 
         if (line.line_profile.size() != history_capacity_) {
@@ -209,7 +197,7 @@ void PleasureAnimation::update(float delta_time,
             }
 
             const float target_value = std::clamp(base_level + ridge_sum * depth_scale, 0.0f, 1.0f);
-            line.line_profile[i] += (target_value - line.line_profile[i]) * kProfileSmoothing;
+            line.line_profile[i] += (target_value - line.line_profile[i]) * params_.profile_smoothing;
         }
     }
 }
@@ -252,13 +240,15 @@ void PleasureAnimation::render(notcurses* /*nc*/) {
         }
 
         const float max_index = static_cast<float>(profile_size - 1u);
-        const int base_y = pixel_rows - 1 - static_cast<int>(line_index) * kLineSpacing - kBaselineMargin;
+        const int base_y = pixel_rows - 1 - static_cast<int>(line_index) * params_.line_spacing -
+                           params_.baseline_margin;
         if (base_y < 0) {
             break;
         }
 
-        const int upward_range = std::max(1, std::min(kMaxUpwardExcursion, std::max(0, base_y)));
-        const int downward_range = std::min(kMaxDownwardExcursion, std::max(0, pixel_rows - 1 - base_y));
+        const int upward_range = std::max(1, std::min(params_.max_upward_excursion, std::max(0, base_y)));
+        const int downward_range =
+            std::min(params_.max_downward_excursion, std::max(0, pixel_rows - 1 - base_y));
 
         for (std::size_t j = 0; j + 1 < profile_size; ++j) {
             const float sample_a = std::clamp(line.line_profile[j], 0.0f, 1.0f);
@@ -322,13 +312,13 @@ void PleasureAnimation::initialize_line_states() {
         return;
     }
 
-    const int available_height = pixel_rows - 1 - kBaselineMargin;
+    const int available_height = pixel_rows - 1 - params_.baseline_margin;
     if (available_height < 0) {
         return;
     }
 
-    const int max_lines = (available_height / kLineSpacing) + 1;
-    const int desired_lines = std::max(1, std::min(kMaxLines, max_lines));
+    const int max_lines = (available_height / params_.line_spacing) + 1;
+    const int desired_lines = std::max(1, std::min(params_.max_lines, max_lines));
 
     lines_.resize(static_cast<std::size_t>(desired_lines));
     for (auto& line : lines_) {
@@ -345,10 +335,10 @@ void PleasureAnimation::initialize_line(LineState& line_state) {
         return;
     }
 
-    const float center_band_start = 0.5f - kCenterBandWidth * 0.5f;
-    const float center_band_end = 0.5f + kCenterBandWidth * 0.5f;
+    const float center_band_start = 0.5f - params_.center_band_width * 0.5f;
+    const float center_band_end = 0.5f + params_.center_band_width * 0.5f;
 
-    std::uniform_int_distribution<int> ridge_count_dist(kMinRidges, kMaxRidges);
+    std::uniform_int_distribution<int> ridge_count_dist(params_.min_ridges, params_.max_ridges);
     const int ridge_count = ridge_count_dist(rng_);
 
     for (int i = 0; i < ridge_count; ++i) {
@@ -358,8 +348,8 @@ void PleasureAnimation::initialize_line(LineState& line_state) {
         ridge.target_pos = pos;
         ridge.current_magnitude = 0.0f;
         ridge.target_magnitude = 0.0f;
-        ridge.noise_timer = random_between(0.0f, kRidgeIntervalMin);
-        ridge.noise_interval = random_between(kRidgeIntervalMin, kRidgeIntervalMax);
+        ridge.noise_timer = random_between(0.0f, params_.ridge_interval_min);
+        ridge.noise_interval = random_between(params_.ridge_interval_min, params_.ridge_interval_max);
         line_state.ridges.push_back(ridge);
     }
 }
@@ -370,6 +360,35 @@ float PleasureAnimation::random_between(float min_value, float max_value) {
     }
     std::uniform_real_distribution<float> dist(min_value, max_value);
     return dist(rng_);
+}
+
+void PleasureAnimation::load_parameters_from_config(const AnimationConfig& config_entry) {
+    auto clamp_unit = [](float value) { return std::clamp(value, 0.0f, 1.0f); };
+
+    params_.magnitude_scale = std::max(0.0f, config_entry.pleasure_magnitude_scale);
+    params_.history_smoothing = clamp_unit(config_entry.pleasure_history_smoothing);
+    params_.global_envelope_smoothing = clamp_unit(config_entry.pleasure_global_envelope_smoothing);
+    params_.profile_smoothing = clamp_unit(config_entry.pleasure_profile_smoothing);
+    params_.ridge_magnitude_smoothing = clamp_unit(config_entry.pleasure_ridge_magnitude_smoothing);
+    params_.ridge_position_smoothing = clamp_unit(config_entry.pleasure_ridge_position_smoothing);
+    params_.center_band_width = std::clamp(config_entry.pleasure_center_band_width, 0.0f, 1.0f);
+    params_.ridge_sigma = std::max(config_entry.pleasure_ridge_sigma, 1e-4f);
+    params_.ridge_position_jitter = std::max(0.0f, config_entry.pleasure_ridge_position_jitter);
+    params_.ridge_magnitude_jitter = std::max(0.0f, config_entry.pleasure_ridge_magnitude_jitter);
+    params_.ridge_interval_min = std::max(config_entry.pleasure_ridge_interval_min, 1e-3f);
+    params_.ridge_interval_max =
+        std::max(params_.ridge_interval_min, config_entry.pleasure_ridge_interval_max);
+
+    const int min_ridges = std::max(1, config_entry.pleasure_min_ridges);
+    const int max_ridges = std::max(min_ridges, config_entry.pleasure_max_ridges);
+    params_.min_ridges = min_ridges;
+    params_.max_ridges = max_ridges;
+
+    params_.line_spacing = std::clamp(config_entry.pleasure_line_spacing, 1, 256);
+    params_.max_lines = std::clamp(config_entry.pleasure_max_lines, 1, 512);
+    params_.baseline_margin = std::max(0, config_entry.pleasure_baseline_margin);
+    params_.max_upward_excursion = std::max(1, config_entry.pleasure_max_upward_excursion);
+    params_.max_downward_excursion = std::max(0, config_entry.pleasure_max_downward_excursion);
 }
 
 void PleasureAnimation::draw_occluded_line(std::vector<uint8_t>& cells,

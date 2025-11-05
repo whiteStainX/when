@@ -123,6 +123,27 @@ struct AnimationConfig {
     int log_padding_x = 2;                // Horizontal padding between border and log text
     std::string log_title;                // Optional title displayed on the top border
     // Add more generic parameters as needed, e.g., std::map<std::string, std::string> params;
+
+    // Pleasure animation parameters
+    float pleasure_magnitude_scale = 4.5f;
+    float pleasure_history_smoothing = 0.2f;
+    float pleasure_global_envelope_smoothing = 0.08f;
+    float pleasure_profile_smoothing = 0.25f;
+    float pleasure_ridge_magnitude_smoothing = 0.18f;
+    float pleasure_ridge_position_smoothing = 0.12f;
+    float pleasure_center_band_width = 0.38f;
+    float pleasure_ridge_sigma = 0.035f;
+    float pleasure_ridge_position_jitter = 0.045f;
+    float pleasure_ridge_magnitude_jitter = 0.35f;
+    float pleasure_ridge_interval_min = 0.35f;
+    float pleasure_ridge_interval_max = 0.75f;
+    int pleasure_min_ridges = 3;
+    int pleasure_max_ridges = 5;
+    int pleasure_line_spacing = 3;
+    int pleasure_max_lines = 32;
+    int pleasure_baseline_margin = 4;
+    int pleasure_max_upward_excursion = 28;
+    int pleasure_max_downward_excursion = 6;
 };
 
 struct AppConfig {
