@@ -2,7 +2,7 @@
 
 A real-time, music-responsive terminal visualization inspired by the iconic "Unknown Pleasures" album art, built with C++ and Notcurses.
 
-![Pleasure Animation GIF](https://storage.googleapis.com/gemini-agile-prod-files/dc139a01-86cb-4f7c-8516-65b60a5396e3/pleasure_animation.gif)
+![Pleasure Animation GIF](extra/pleasure.gif)
 
 ## Features
 
@@ -37,7 +37,7 @@ A real-time, music-responsive terminal visualization inspired by the iconic "Unk
 1.  **Clone the repository:**
 
     ```sh
-    git clone <repository-url>
+    git clone https://github.com/whiteStainX/when.git
     cd when
     ```
 
