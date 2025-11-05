@@ -34,15 +34,19 @@ public:
 
 private:
     void create_or_resize_plane(notcurses* nc);
-    void initialize_ridges();
+    struct LineState;
+
+    void initialize_line_states();
+    void initialize_line(LineState& line_state);
     float random_between(float min_value, float max_value);
-    void draw_line(std::vector<uint8_t>& cells,
-                   unsigned int cell_rows,
-                   unsigned int cell_cols,
-                   int y1,
-                   int x1,
-                   int y2,
-                   int x2);
+    void draw_occluded_line(std::vector<uint8_t>& cells,
+                            unsigned int cell_rows,
+                            unsigned int cell_cols,
+                            int y1,
+                            int x1,
+                            int y2,
+                            int x2,
+                            std::vector<int>& skyline_buffer);
     void set_braille_pixel(std::vector<uint8_t>& cells,
                            unsigned int cell_cols,
                            int y,
@@ -71,8 +75,12 @@ private:
         float noise_interval = 0.0f;
     };
 
-    std::vector<RidgeState> ridges_;
-    std::vector<float> line_profile_;
+    struct LineState {
+        std::vector<RidgeState> ridges;
+        std::vector<float> line_profile;
+    };
+
+    std::vector<LineState> lines_;
     std::mt19937 rng_;
     std::size_t history_capacity_ = 0u;
     float last_magnitude_ = 0.0f;
