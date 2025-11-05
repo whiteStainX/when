@@ -110,7 +110,7 @@ void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
 void PleasureAnimation::update(float delta_time,
                                const AudioMetrics& /*metrics*/,
                                const std::vector<float>& bands,
-                               float /*beat_strength*/) {
+                               float beat_strength) {
     if (history_capacity_ < 2u || lines_.empty()) {
         return;
     }
@@ -128,14 +128,23 @@ void PleasureAnimation::update(float delta_time,
         }
     }
 
-    const float history_smoothing = params_.history_smoothing;
-    const float smoothed = (1.0f - history_smoothing) * last_magnitude_ +
-                           history_smoothing * magnitude;
+    const float beat_clamped = std::clamp(beat_strength, 0.0f, 1.0f);
+    const float responsive_history =
+        std::clamp(params_.history_smoothing * (1.0f + beat_clamped * params_.history_beat_boost), 0.0f, 1.0f);
+    const float smoothed = (1.0f - responsive_history) * last_magnitude_ +
+                           responsive_history * magnitude;
     last_magnitude_ = smoothed;
 
     const float normalized_magnitude = std::clamp(smoothed * params_.magnitude_scale, 0.0f, 1.0f);
-    global_magnitude_ +=
-        (normalized_magnitude - global_magnitude_) * params_.global_envelope_smoothing;
+    const float target_global =
+        std::clamp(normalized_magnitude + beat_clamped * params_.beat_response, 0.0f, 1.0f);
+    const float envelope_smoothing = (target_global >= global_magnitude_)
+                                         ? std::clamp(params_.global_envelope_smoothing *
+                                                          (1.0f + beat_clamped * params_.beat_attack_boost),
+                                                      0.0f,
+                                                      1.0f)
+                                         : params_.global_envelope_smoothing;
+    global_magnitude_ += (target_global - global_magnitude_) * envelope_smoothing;
 
     const float center_band_start = 0.5f - params_.center_band_width * 0.5f;
     const float center_band_end = 0.5f + params_.center_band_width * 0.5f;
@@ -156,7 +165,8 @@ void PleasureAnimation::update(float delta_time,
         const float depth_scale = 1.0f - depth * 0.45f;
 
         for (auto& ridge : line.ridges) {
-            ridge.noise_timer += delta_time;
+            const float noise_speed = 1.0f + beat_clamped * params_.ridge_noise_acceleration;
+            ridge.noise_timer += delta_time * noise_speed;
             if (ridge.noise_timer >= ridge.noise_interval) {
                 const float jitter =
                     random_between(-params_.ridge_position_jitter, params_.ridge_position_jitter);
@@ -164,9 +174,8 @@ void PleasureAnimation::update(float delta_time,
 
                 const float magnitude_jitter =
                     1.0f + random_between(-params_.ridge_magnitude_jitter, params_.ridge_magnitude_jitter);
-                ridge.target_magnitude = std::clamp(global_magnitude_ * magnitude_jitter * depth_scale,
-                                                    0.0f,
-                                                    1.0f);
+                ridge.target_magnitude =
+                    std::clamp(global_magnitude_ * magnitude_jitter * depth_scale, 0.0f, 1.0f);
 
                 ridge.noise_timer = 0.0f;
                 ridge.noise_interval =
@@ -196,7 +205,14 @@ void PleasureAnimation::update(float delta_time,
                 ridge_sum += ridge.current_magnitude * gaussian;
             }
 
-            const float target_value = std::clamp(base_level + ridge_sum * depth_scale, 0.0f, 1.0f);
+            float profile_noise = 0.0f;
+            if (params_.profile_noise_amount > 0.0f) {
+                profile_noise = random_between(-params_.profile_noise_amount, params_.profile_noise_amount) *
+                                (0.4f + 0.6f * (global_magnitude_ + beat_clamped * 0.5f));
+            }
+
+            const float target_value =
+                std::clamp(base_level + ridge_sum * depth_scale + profile_noise, 0.0f, 1.0f);
             line.line_profile[i] += (target_value - line.line_profile[i]) * params_.profile_smoothing;
         }
     }
@@ -378,6 +394,11 @@ void PleasureAnimation::load_parameters_from_config(const AnimationConfig& confi
     params_.ridge_interval_min = std::max(config_entry.pleasure_ridge_interval_min, 1e-3f);
     params_.ridge_interval_max =
         std::max(params_.ridge_interval_min, config_entry.pleasure_ridge_interval_max);
+    params_.history_beat_boost = std::max(0.0f, config_entry.pleasure_history_beat_boost);
+    params_.beat_response = std::max(0.0f, config_entry.pleasure_beat_response);
+    params_.beat_attack_boost = std::max(0.0f, config_entry.pleasure_beat_attack_boost);
+    params_.ridge_noise_acceleration = std::max(0.0f, config_entry.pleasure_ridge_noise_acceleration);
+    params_.profile_noise_amount = std::max(0.0f, config_entry.pleasure_profile_noise_amount);
 
     const int min_ridges = std::max(1, config_entry.pleasure_min_ridges);
     const int max_ridges = std::max(min_ridges, config_entry.pleasure_max_ridges);
