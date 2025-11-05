@@ -331,6 +331,117 @@ std::optional<AnimationConfig> parse_animation_config(
         parse_float32(breathe_band_weight_it->second.value, anim_config.breathe_band_weight);
     }
 
+    const auto pleasure_magnitude_scale_it = raw_anim_config.find("pleasure_magnitude_scale");
+    if (pleasure_magnitude_scale_it != raw_anim_config.end()) {
+        parse_float32(pleasure_magnitude_scale_it->second.value, anim_config.pleasure_magnitude_scale);
+    }
+
+    const auto pleasure_history_smoothing_it = raw_anim_config.find("pleasure_history_smoothing");
+    if (pleasure_history_smoothing_it != raw_anim_config.end()) {
+        parse_float32(pleasure_history_smoothing_it->second.value, anim_config.pleasure_history_smoothing);
+    }
+
+    const auto pleasure_global_envelope_smoothing_it =
+        raw_anim_config.find("pleasure_global_envelope_smoothing");
+    if (pleasure_global_envelope_smoothing_it != raw_anim_config.end()) {
+        parse_float32(pleasure_global_envelope_smoothing_it->second.value,
+                      anim_config.pleasure_global_envelope_smoothing);
+    }
+
+    const auto pleasure_profile_smoothing_it = raw_anim_config.find("pleasure_profile_smoothing");
+    if (pleasure_profile_smoothing_it != raw_anim_config.end()) {
+        parse_float32(pleasure_profile_smoothing_it->second.value, anim_config.pleasure_profile_smoothing);
+    }
+
+    const auto pleasure_ridge_magnitude_smoothing_it =
+        raw_anim_config.find("pleasure_ridge_magnitude_smoothing");
+    if (pleasure_ridge_magnitude_smoothing_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_magnitude_smoothing_it->second.value,
+                      anim_config.pleasure_ridge_magnitude_smoothing);
+    }
+
+    const auto pleasure_ridge_position_smoothing_it =
+        raw_anim_config.find("pleasure_ridge_position_smoothing");
+    if (pleasure_ridge_position_smoothing_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_position_smoothing_it->second.value,
+                      anim_config.pleasure_ridge_position_smoothing);
+    }
+
+    const auto pleasure_center_band_width_it = raw_anim_config.find("pleasure_center_band_width");
+    if (pleasure_center_band_width_it != raw_anim_config.end()) {
+        parse_float32(pleasure_center_band_width_it->second.value, anim_config.pleasure_center_band_width);
+    }
+
+    const auto pleasure_ridge_sigma_it = raw_anim_config.find("pleasure_ridge_sigma");
+    if (pleasure_ridge_sigma_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_sigma_it->second.value, anim_config.pleasure_ridge_sigma);
+    }
+
+    const auto pleasure_ridge_position_jitter_it =
+        raw_anim_config.find("pleasure_ridge_position_jitter");
+    if (pleasure_ridge_position_jitter_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_position_jitter_it->second.value,
+                      anim_config.pleasure_ridge_position_jitter);
+    }
+
+    const auto pleasure_ridge_magnitude_jitter_it =
+        raw_anim_config.find("pleasure_ridge_magnitude_jitter");
+    if (pleasure_ridge_magnitude_jitter_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_magnitude_jitter_it->second.value,
+                      anim_config.pleasure_ridge_magnitude_jitter);
+    }
+
+    const auto pleasure_ridge_interval_min_it = raw_anim_config.find("pleasure_ridge_interval_min");
+    if (pleasure_ridge_interval_min_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_interval_min_it->second.value,
+                      anim_config.pleasure_ridge_interval_min);
+    }
+
+    const auto pleasure_ridge_interval_max_it = raw_anim_config.find("pleasure_ridge_interval_max");
+    if (pleasure_ridge_interval_max_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_interval_max_it->second.value,
+                      anim_config.pleasure_ridge_interval_max);
+    }
+
+    const auto pleasure_min_ridges_it = raw_anim_config.find("pleasure_min_ridges");
+    if (pleasure_min_ridges_it != raw_anim_config.end()) {
+        parse_int32(pleasure_min_ridges_it->second.value, anim_config.pleasure_min_ridges);
+    }
+
+    const auto pleasure_max_ridges_it = raw_anim_config.find("pleasure_max_ridges");
+    if (pleasure_max_ridges_it != raw_anim_config.end()) {
+        parse_int32(pleasure_max_ridges_it->second.value, anim_config.pleasure_max_ridges);
+    }
+
+    const auto pleasure_line_spacing_it = raw_anim_config.find("pleasure_line_spacing");
+    if (pleasure_line_spacing_it != raw_anim_config.end()) {
+        parse_int32(pleasure_line_spacing_it->second.value, anim_config.pleasure_line_spacing);
+    }
+
+    const auto pleasure_max_lines_it = raw_anim_config.find("pleasure_max_lines");
+    if (pleasure_max_lines_it != raw_anim_config.end()) {
+        parse_int32(pleasure_max_lines_it->second.value, anim_config.pleasure_max_lines);
+    }
+
+    const auto pleasure_baseline_margin_it = raw_anim_config.find("pleasure_baseline_margin");
+    if (pleasure_baseline_margin_it != raw_anim_config.end()) {
+        parse_int32(pleasure_baseline_margin_it->second.value, anim_config.pleasure_baseline_margin);
+    }
+
+    const auto pleasure_max_upward_excursion_it =
+        raw_anim_config.find("pleasure_max_upward_excursion");
+    if (pleasure_max_upward_excursion_it != raw_anim_config.end()) {
+        parse_int32(pleasure_max_upward_excursion_it->second.value,
+                    anim_config.pleasure_max_upward_excursion);
+    }
+
+    const auto pleasure_max_downward_excursion_it =
+        raw_anim_config.find("pleasure_max_downward_excursion");
+    if (pleasure_max_downward_excursion_it != raw_anim_config.end()) {
+        parse_int32(pleasure_max_downward_excursion_it->second.value,
+                    anim_config.pleasure_max_downward_excursion);
+    }
+
     return anim_config;
 }
 

@@ -39,6 +39,7 @@ private:
     void initialize_line_states();
     void initialize_line(LineState& line_state);
     float random_between(float min_value, float max_value);
+    void load_parameters_from_config(const AnimationConfig& config_entry);
     void draw_occluded_line(std::vector<uint8_t>& cells,
                             unsigned int cell_rows,
                             unsigned int cell_cols,
@@ -80,11 +81,34 @@ private:
         std::vector<float> line_profile;
     };
 
+    struct PleasureParameters {
+        float magnitude_scale = 4.5f;
+        float history_smoothing = 0.2f;
+        float global_envelope_smoothing = 0.08f;
+        float profile_smoothing = 0.25f;
+        float ridge_magnitude_smoothing = 0.18f;
+        float ridge_position_smoothing = 0.12f;
+        float center_band_width = 0.38f;
+        float ridge_sigma = 0.035f;
+        float ridge_position_jitter = 0.045f;
+        float ridge_magnitude_jitter = 0.35f;
+        float ridge_interval_min = 0.35f;
+        float ridge_interval_max = 0.75f;
+        int min_ridges = 3;
+        int max_ridges = 5;
+        int line_spacing = 3;
+        int max_lines = 32;
+        int baseline_margin = 4;
+        int max_upward_excursion = 28;
+        int max_downward_excursion = 6;
+    };
+
     std::vector<LineState> lines_;
     std::mt19937 rng_;
     std::size_t history_capacity_ = 0u;
     float last_magnitude_ = 0.0f;
     float global_magnitude_ = 0.0f;
+    PleasureParameters params_{};
 };
 
 } // namespace animations
