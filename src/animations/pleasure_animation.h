@@ -1,6 +1,6 @@
 #pragma once
 
-#include <deque>
+#include <random>
 #include <vector>
 
 #include <notcurses/notcurses.h>
@@ -34,6 +34,8 @@ public:
 
 private:
     void create_or_resize_plane(notcurses* nc);
+    void initialize_ridges();
+    float random_between(float min_value, float max_value);
     void draw_line(std::vector<uint8_t>& cells,
                    unsigned int cell_rows,
                    unsigned int cell_cols,
@@ -60,9 +62,21 @@ private:
     int plane_origin_y_ = 0;
     int plane_origin_x_ = 0;
 
-    std::deque<float> history_buffer_;
+    struct RidgeState {
+        float current_pos = 0.0f;
+        float target_pos = 0.0f;
+        float current_magnitude = 0.0f;
+        float target_magnitude = 0.0f;
+        float noise_timer = 0.0f;
+        float noise_interval = 0.0f;
+    };
+
+    std::vector<RidgeState> ridges_;
+    std::vector<float> line_profile_;
+    std::mt19937 rng_;
     std::size_t history_capacity_ = 0u;
     float last_magnitude_ = 0.0f;
+    float global_magnitude_ = 0.0f;
 };
 
 } // namespace animations

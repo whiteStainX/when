@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>
+#include <random>
 #include <vector>
 
 #include "animation_event_utils.h"
@@ -19,9 +20,22 @@ constexpr int kBrailleRowsPerCell = 4;
 constexpr int kBrailleColsPerCell = 2;
 constexpr float kMagnitudeScale = 4.5f;
 constexpr float kHistorySmoothing = 0.2f;
+constexpr float kGlobalEnvelopeSmoothing = 0.08f;
+constexpr float kProfileSmoothing = 0.25f;
+constexpr float kRidgeMagnitudeSmoothing = 0.18f;
+constexpr float kRidgePositionSmoothing = 0.12f;
+constexpr float kCenterBandWidth = 0.38f;
+constexpr float kRidgeSigma = 0.035f;
+constexpr float kRidgePositionJitter = 0.045f;
+constexpr float kRidgeMagnitudeJitter = 0.35f;
+constexpr float kRidgeIntervalMin = 0.35f;
+constexpr float kRidgeIntervalMax = 0.75f;
+constexpr int kMinRidges = 3;
+constexpr int kMaxRidges = 5;
 } // namespace
 
-PleasureAnimation::PleasureAnimation() = default;
+PleasureAnimation::PleasureAnimation()
+    : rng_(std::random_device{}()) {}
 
 PleasureAnimation::~PleasureAnimation() {
     if (plane_) {
@@ -102,9 +116,10 @@ void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
 
     configure_history_capacity();
     last_magnitude_ = 0.0f;
+    global_magnitude_ = 0.0f;
 }
 
-void PleasureAnimation::update(float /*delta_time*/,
+void PleasureAnimation::update(float delta_time,
                                const AudioMetrics& /*metrics*/,
                                const std::vector<float>& bands,
                                float /*beat_strength*/) {
@@ -129,9 +144,50 @@ void PleasureAnimation::update(float /*delta_time*/,
                            kHistorySmoothing * magnitude;
     last_magnitude_ = smoothed;
 
-    history_buffer_.push_front(smoothed);
-    while (history_buffer_.size() > history_capacity_) {
-        history_buffer_.pop_back();
+    const float normalized_magnitude = std::clamp(smoothed * kMagnitudeScale, 0.0f, 1.0f);
+    global_magnitude_ += (normalized_magnitude - global_magnitude_) * kGlobalEnvelopeSmoothing;
+
+    const float center_band_start = 0.5f - kCenterBandWidth * 0.5f;
+    const float center_band_end = 0.5f + kCenterBandWidth * 0.5f;
+
+    for (auto& ridge : ridges_) {
+        ridge.noise_timer += delta_time;
+        if (ridge.noise_timer >= ridge.noise_interval) {
+            const float jitter = random_between(-kRidgePositionJitter, kRidgePositionJitter);
+            ridge.target_pos = std::clamp(ridge.target_pos + jitter, center_band_start, center_band_end);
+
+            const float magnitude_jitter = 1.0f + random_between(-kRidgeMagnitudeJitter, kRidgeMagnitudeJitter);
+            ridge.target_magnitude = std::clamp(global_magnitude_ * magnitude_jitter, 0.0f, 1.0f);
+
+            ridge.noise_timer = 0.0f;
+            ridge.noise_interval = random_between(kRidgeIntervalMin, kRidgeIntervalMax);
+        }
+
+        ridge.current_pos += (ridge.target_pos - ridge.current_pos) * kRidgePositionSmoothing;
+        ridge.current_magnitude += (ridge.target_magnitude - ridge.current_magnitude) * kRidgeMagnitudeSmoothing;
+    }
+
+    if (history_capacity_ == 0u || line_profile_.size() != history_capacity_) {
+        line_profile_.assign(history_capacity_, 0.0f);
+    }
+
+    const float base_level = global_magnitude_ * 0.08f;
+    const float two_sigma_sq = 2.0f * kRidgeSigma * kRidgeSigma;
+
+    for (std::size_t i = 0; i < history_capacity_; ++i) {
+        const float x_norm = (history_capacity_ > 1u)
+                                 ? static_cast<float>(i) / static_cast<float>(history_capacity_ - 1u)
+                                 : 0.0f;
+
+        float ridge_sum = 0.0f;
+        for (const auto& ridge : ridges_) {
+            const float dx = x_norm - ridge.current_pos;
+            const float gaussian = std::exp(-(dx * dx) / std::max(two_sigma_sq, 1e-6f));
+            ridge_sum += ridge.current_magnitude * gaussian;
+        }
+
+        const float target_value = std::clamp(base_level + ridge_sum, 0.0f, 1.0f);
+        line_profile_[i] += (target_value - line_profile_[i]) * kProfileSmoothing;
     }
 }
 
@@ -158,26 +214,23 @@ void PleasureAnimation::render(notcurses* /*nc*/) {
 
     std::vector<uint8_t> braille_cells(rows * cols, 0);
 
-    const std::size_t history_size = history_buffer_.size();
-    if (history_size < 2u) {
+    const std::size_t profile_size = line_profile_.size();
+    if (profile_size < 2u) {
         return;
     }
 
-    const float max_index = static_cast<float>(history_size - 1u);
+    const float max_index = static_cast<float>(profile_size - 1u);
     const float max_x = static_cast<float>(pixel_cols - 1);
 
     const int baseline = pixel_rows / 2;
     const int amplitude_range = std::max(1, std::min(baseline, pixel_rows - 1 - baseline));
 
-    for (std::size_t j = 0; j + 1 < history_size; ++j) {
-        const float sample_a = history_buffer_[j];
-        const float sample_b = history_buffer_[j + 1];
+    for (std::size_t j = 0; j + 1 < profile_size; ++j) {
+        const float sample_a = std::clamp(line_profile_[j], 0.0f, 1.0f);
+        const float sample_b = std::clamp(line_profile_[j + 1], 0.0f, 1.0f);
 
-        const float scaled_a = std::clamp(sample_a * kMagnitudeScale, 0.0f, 1.0f);
-        const float scaled_b = std::clamp(sample_b * kMagnitudeScale, 0.0f, 1.0f);
-
-        const float centered_a = scaled_a * 2.0f - 1.0f;
-        const float centered_b = scaled_b * 2.0f - 1.0f;
+        const float centered_a = sample_a * 2.0f - 1.0f;
+        const float centered_b = sample_b * 2.0f - 1.0f;
 
         int y1 = baseline - static_cast<int>(std::lround(centered_a * amplitude_range));
         int y2 = baseline - static_cast<int>(std::lround(centered_b * amplitude_range));
@@ -185,8 +238,8 @@ void PleasureAnimation::render(notcurses* /*nc*/) {
         y1 = std::clamp(y1, 0, pixel_rows - 1);
         y2 = std::clamp(y2, 0, pixel_rows - 1);
 
-        const float x_norm_a = (max_index - static_cast<float>(j)) / std::max(1.0f, max_index);
-        const float x_norm_b = (max_index - static_cast<float>(j + 1u)) / std::max(1.0f, max_index);
+        const float x_norm_a = static_cast<float>(j) / std::max(1.0f, max_index);
+        const float x_norm_b = static_cast<float>(j + 1u) / std::max(1.0f, max_index);
 
         int x1 = static_cast<int>(std::lround(x_norm_a * max_x));
         int x2 = static_cast<int>(std::lround(x_norm_b * max_x));
@@ -213,6 +266,40 @@ void PleasureAnimation::deactivate() {
 
 void PleasureAnimation::bind_events(const AnimationConfig& config, events::EventBus& bus) {
     bind_standard_frame_updates(this, config, bus);
+}
+
+void PleasureAnimation::initialize_ridges() {
+    ridges_.clear();
+
+    if (history_capacity_ < 2u) {
+        return;
+    }
+
+    const float center_band_start = 0.5f - kCenterBandWidth * 0.5f;
+    const float center_band_end = 0.5f + kCenterBandWidth * 0.5f;
+
+    std::uniform_int_distribution<int> ridge_count_dist(kMinRidges, kMaxRidges);
+    const int ridge_count = ridge_count_dist(rng_);
+
+    for (int i = 0; i < ridge_count; ++i) {
+        const float pos = random_between(center_band_start, center_band_end);
+        PleasureAnimation::RidgeState ridge{};
+        ridge.current_pos = pos;
+        ridge.target_pos = pos;
+        ridge.current_magnitude = 0.0f;
+        ridge.target_magnitude = 0.0f;
+        ridge.noise_timer = random_between(0.0f, kRidgeIntervalMin);
+        ridge.noise_interval = random_between(kRidgeIntervalMin, kRidgeIntervalMax);
+        ridges_.push_back(ridge);
+    }
+}
+
+float PleasureAnimation::random_between(float min_value, float max_value) {
+    if (min_value > max_value) {
+        std::swap(min_value, max_value);
+    }
+    std::uniform_real_distribution<float> dist(min_value, max_value);
+    return dist(rng_);
 }
 
 void PleasureAnimation::draw_line(std::vector<uint8_t>& cells,
@@ -374,7 +461,8 @@ void PleasureAnimation::configure_history_capacity() {
         history_capacity_ = std::max<std::size_t>(2u, pixel_cols);
     }
 
-    history_buffer_.assign(history_capacity_, 0.0f);
+    line_profile_.assign(history_capacity_, 0.0f);
+    initialize_ridges();
 }
 
 } // namespace animations
