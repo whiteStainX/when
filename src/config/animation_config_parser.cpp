@@ -402,6 +402,31 @@ std::optional<AnimationConfig> parse_animation_config(
         parse_float32(pleasure_ridge_interval_max_it->second.value,
                       anim_config.pleasure_ridge_interval_max);
     }
+    const auto pleasure_history_beat_boost_it = raw_anim_config.find("pleasure_history_beat_boost");
+    if (pleasure_history_beat_boost_it != raw_anim_config.end()) {
+        parse_float32(pleasure_history_beat_boost_it->second.value,
+                      anim_config.pleasure_history_beat_boost);
+    }
+    const auto pleasure_beat_response_it = raw_anim_config.find("pleasure_beat_response");
+    if (pleasure_beat_response_it != raw_anim_config.end()) {
+        parse_float32(pleasure_beat_response_it->second.value, anim_config.pleasure_beat_response);
+    }
+    const auto pleasure_beat_attack_boost_it = raw_anim_config.find("pleasure_beat_attack_boost");
+    if (pleasure_beat_attack_boost_it != raw_anim_config.end()) {
+        parse_float32(pleasure_beat_attack_boost_it->second.value,
+                      anim_config.pleasure_beat_attack_boost);
+    }
+    const auto pleasure_ridge_noise_acceleration_it =
+        raw_anim_config.find("pleasure_ridge_noise_acceleration");
+    if (pleasure_ridge_noise_acceleration_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_noise_acceleration_it->second.value,
+                      anim_config.pleasure_ridge_noise_acceleration);
+    }
+    const auto pleasure_profile_noise_amount_it = raw_anim_config.find("pleasure_profile_noise_amount");
+    if (pleasure_profile_noise_amount_it != raw_anim_config.end()) {
+        parse_float32(pleasure_profile_noise_amount_it->second.value,
+                      anim_config.pleasure_profile_noise_amount);
+    }
 
     const auto pleasure_min_ridges_it = raw_anim_config.find("pleasure_min_ridges");
     if (pleasure_min_ridges_it != raw_anim_config.end()) {

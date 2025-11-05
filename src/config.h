@@ -137,6 +137,11 @@ struct AnimationConfig {
     float pleasure_ridge_magnitude_jitter = 0.35f;
     float pleasure_ridge_interval_min = 0.35f;
     float pleasure_ridge_interval_max = 0.75f;
+    float pleasure_history_beat_boost = 2.2f;
+    float pleasure_beat_response = 0.7f;
+    float pleasure_beat_attack_boost = 3.0f;
+    float pleasure_ridge_noise_acceleration = 1.8f;
+    float pleasure_profile_noise_amount = 0.05f;
     int pleasure_min_ridges = 3;
     int pleasure_max_ridges = 5;
     int pleasure_line_spacing = 3;

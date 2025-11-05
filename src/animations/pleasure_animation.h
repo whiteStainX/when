@@ -94,6 +94,11 @@ private:
         float ridge_magnitude_jitter = 0.35f;
         float ridge_interval_min = 0.35f;
         float ridge_interval_max = 0.75f;
+        float history_beat_boost = 2.2f;
+        float beat_response = 0.7f;
+        float beat_attack_boost = 3.0f;
+        float ridge_noise_acceleration = 1.8f;
+        float profile_noise_amount = 0.05f;
         int min_ridges = 3;
         int max_ridges = 5;
         int line_spacing = 3;
