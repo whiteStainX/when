@@ -42,16 +42,22 @@ std::string node_to_string(const toml::node& node) {
     if (auto value = node.value<std::string>()) {
         return *value;
     }
-    if (auto value = node.value<bool>()) {
-        return *value ? "true" : "false";
+    if (node.is_integer()) {
+        if (auto value = node.value<std::int64_t>()) {
+            return std::to_string(*value);
+        }
     }
-    if (auto value = node.value<std::int64_t>()) {
-        return std::to_string(*value);
+    if (node.is_floating_point()) {
+        if (auto value = node.value<double>()) {
+            std::ostringstream oss;
+            oss << *value;
+            return oss.str();
+        }
     }
-    if (auto value = node.value<double>()) {
-        std::ostringstream oss;
-        oss << *value;
-        return oss.str();
+    if (node.is_boolean()) {
+        if (auto value = node.value<bool>()) {
+            return *value ? "true" : "false";
+        }
     }
     if (auto value = node.value<toml::date>()) {
         std::ostringstream oss;
