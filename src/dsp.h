@@ -8,6 +8,7 @@
 
 #include "audio/audio_features.h"
 #include "audio/feature_extractor.h"
+#include "audio/feature_input_frame.h"
 
 extern "C" {
 #include <kiss_fft.h>
@@ -55,8 +56,13 @@ private:
     std::vector<float> band_energies_;
     std::vector<std::pair<std::size_t, std::size_t>> band_bin_ranges_;
     std::vector<float> prev_magnitudes_;
+    std::vector<float> instantaneous_band_energies_;
+    std::vector<float> band_flux_;
+    std::vector<float> fft_magnitudes_;
+    std::vector<float> fft_phases_;
 
     FeatureExtractor feature_extractor_;
+    FeatureInputFrame feature_input_frame_{};
     AudioFeatures latest_features_{};
 
     kiss_fft_cfg fft_cfg_;

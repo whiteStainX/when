@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
 #include <utility>
 #include <vector>
 
 #include "audio/audio_features.h"
+#include "audio/feature_input_frame.h"
 
 namespace when {
 
@@ -29,7 +31,7 @@ public:
     void prepare(std::size_t band_count);
     void reset();
 
-    AudioFeatures process(const std::vector<float>& fft_bands, float beat_strength);
+    AudioFeatures process(const FeatureInputFrame& input_frame);
 
     void set_config(const Config& config);
     const Config& config() const { return config_; }
@@ -39,10 +41,10 @@ private:
 
     static std::pair<std::size_t, std::size_t> resolve_band_indices(std::size_t band_count,
                                                                     const BandRange& range);
-    static float compute_average_energy(const std::vector<float>& bands,
+    static float compute_average_energy(std::span<const float> bands,
                                         std::size_t start,
                                         std::size_t end);
-    float compute_spectral_centroid(const std::vector<float>& bands,
+    float compute_spectral_centroid(std::span<const float> bands,
                                     double total_energy_sum) const;
 
     struct TempoTrackerState {
