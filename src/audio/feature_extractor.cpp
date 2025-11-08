@@ -5,13 +5,42 @@
 
 namespace when {
 
-FeatureExtractor::FeatureExtractor() = default;
+FeatureExtractor::FeatureExtractor() { reset(); }
 
-FeatureExtractor::FeatureExtractor(Config config) : config_(config) {}
+FeatureExtractor::FeatureExtractor(Config config) : config_(config) { reset(); }
 
-void FeatureExtractor::set_config(const Config& config) { config_ = config; }
+void FeatureExtractor::prepare(std::size_t band_count) {
+    ensure_band_capacity(band_count);
+    reset();
+}
 
-AudioFeatures FeatureExtractor::process(const std::vector<float>& fft_bands, float beat_strength) const {
+void FeatureExtractor::reset() {
+    if (band_count_ > 0) {
+        std::fill(band_envelopes_.begin(), band_envelopes_.end(), 0.0f);
+        std::fill(last_band_energies_.begin(), last_band_energies_.end(), 0.0f);
+    }
+    if (onset_history_.empty()) {
+        onset_history_.resize(kDefaultOnsetHistoryLength, 0.0f);
+    } else {
+        std::fill(onset_history_.begin(), onset_history_.end(), 0.0f);
+    }
+    onset_history_write_pos_ = 0;
+    tempo_state_ = {};
+    bass_envelope_ = 0.0f;
+    mid_envelope_ = 0.0f;
+    treble_envelope_ = 0.0f;
+}
+
+void FeatureExtractor::set_config(const Config& config) {
+    config_ = config;
+    reset();
+}
+
+AudioFeatures FeatureExtractor::process(const std::vector<float>& fft_bands, float beat_strength) {
+    if (band_count_ != fft_bands.size()) {
+        prepare(fft_bands.size());
+    }
+
     AudioFeatures features{};
     features.beat_strength = beat_strength;
     features.beat_detected = beat_strength >= config_.beat_detection_threshold;
@@ -19,6 +48,10 @@ AudioFeatures FeatureExtractor::process(const std::vector<float>& fft_bands, flo
     const std::size_t band_count = fft_bands.size();
     if (band_count == 0) {
         return features;
+    }
+
+    if (!last_band_energies_.empty()) {
+        std::copy(fft_bands.begin(), fft_bands.end(), last_band_energies_.begin());
     }
 
     auto [bass_start, bass_end] = resolve_band_indices(band_count, config_.bass_range);
@@ -43,7 +76,18 @@ AudioFeatures FeatureExtractor::process(const std::vector<float>& fft_bands, flo
         features.spectral_centroid = 0.0f;
     }
 
+    bass_envelope_ = features.bass_energy;
+    mid_envelope_ = features.mid_energy;
+    treble_envelope_ = features.treble_energy;
+
     return features;
+}
+
+void FeatureExtractor::ensure_band_capacity(std::size_t band_count) {
+    band_count_ = band_count;
+    weighting_curve_.assign(band_count_, 1.0f);
+    band_envelopes_.assign(band_count_, 0.0f);
+    last_band_energies_.assign(band_count_, 0.0f);
 }
 
 std::pair<std::size_t, std::size_t> FeatureExtractor::resolve_band_indices(std::size_t band_count,
