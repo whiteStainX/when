@@ -109,26 +109,18 @@ void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
 
 void PleasureAnimation::update(float delta_time,
                                const AudioMetrics& /*metrics*/,
-                               const std::vector<float>& bands,
-                               float beat_strength) {
+                               const AudioFeatures& features) {
     if (history_capacity_ < 2u || lines_.empty()) {
         return;
     }
 
-    float magnitude = 0.0f;
-    if (!bands.empty()) {
-        const std::size_t slice_size = std::max<std::size_t>(1u, bands.size() / 8u);
-        const std::size_t upper = std::min<std::size_t>(bands.size(), slice_size);
-        if (upper > 0u) {
-            float sum = 0.0f;
-            for (std::size_t i = 0; i < upper; ++i) {
-                sum += std::abs(bands[i]);
-            }
-            magnitude = sum / static_cast<float>(upper);
-        }
-    }
+    const float weighted_energy = features.bass_energy * 0.5f +
+                                  features.mid_energy * 0.35f +
+                                  features.treble_energy * 0.15f;
+    const float reference = std::max({features.total_energy, features.bass_energy, features.mid_energy, features.treble_energy, 1e-5f});
+    float magnitude = std::clamp(weighted_energy / reference, 0.0f, 1.0f);
 
-    const float beat_clamped = std::clamp(beat_strength, 0.0f, 1.0f);
+    const float beat_clamped = std::clamp(features.beat_strength, 0.0f, 1.0f);
     const float responsive_history =
         std::clamp(params_.history_smoothing * (1.0f + beat_clamped * params_.history_beat_boost), 0.0f, 1.0f);
     const float smoothed = (1.0f - responsive_history) * last_magnitude_ +

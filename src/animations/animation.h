@@ -8,6 +8,7 @@
 #include "../audio_engine.h"
 #include "../config.h" // Include AppConfig
 #include "../events/event_bus.h"
+#include "audio/audio_features.h"
 
 namespace when {
 namespace animations {
@@ -25,8 +26,7 @@ public:
     virtual void init(notcurses* nc, const AppConfig& config) = 0;
     virtual void update(float delta_time,
                         const AudioMetrics& metrics,
-                        const std::vector<float>& bands,
-                        float beat_strength) = 0;
+                        const AudioFeatures& features) = 0;
     virtual void render(notcurses* nc) = 0;
     virtual void activate() = 0;
     virtual void deactivate() = 0;

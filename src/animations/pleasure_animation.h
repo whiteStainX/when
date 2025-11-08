@@ -19,8 +19,7 @@ public:
     void init(notcurses* nc, const AppConfig& config) override;
     void update(float delta_time,
                 const AudioMetrics& metrics,
-                const std::vector<float>& bands,
-                float beat_strength) override;
+                const AudioFeatures& features) override;
     void render(notcurses* nc) override;
 
     void activate() override;

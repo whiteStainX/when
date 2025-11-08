@@ -35,18 +35,18 @@ public:
         log_header();
     }
 
-    void on_frame(const AudioMetrics&, const std::vector<float>&, float beat_strength, double time_s) override {
+    void on_frame(const AudioMetrics&, const AudioFeatures& features, double time_s) override {
         if (!enabled_) {
             return;
         }
-        if (beat_strength < threshold_) {
+        if (features.beat_strength < threshold_) {
             return;
         }
         if (time_s - last_log_time_ < log_interval_) {
             return;
         }
         last_log_time_ = time_s;
-        write_log(beat_strength, time_s);
+        write_log(features.beat_strength, time_s);
     }
 
 private:
@@ -126,11 +126,10 @@ void PluginManager::load_from_config(const AppConfig& config) {
 }
 
 void PluginManager::notify_frame(const AudioMetrics& metrics,
-                                 const std::vector<float>& bands,
-                                 float beat_strength,
+                                 const AudioFeatures& features,
                                  double time_s) {
     for (const std::unique_ptr<Plugin>& plugin : active_) {
-        plugin->on_frame(metrics, bands, beat_strength, time_s);
+        plugin->on_frame(metrics, features, time_s);
     }
 }
 

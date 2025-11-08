@@ -41,13 +41,13 @@ void AnimationManager::load_animations(notcurses* nc, const AppConfig& app_confi
 
 void AnimationManager::update_all(float delta_time,
                                   const AudioMetrics& metrics,
-                                  const AudioFeatures& features,
-                                  const std::vector<float>& bands,
-                                  float beat_strength) {
-    events::BeatDetectedEvent beat_event{beat_strength};
-    event_bus_.publish(beat_event);
+                                  const AudioFeatures& features) {
+    if (features.beat_detected) {
+        events::BeatDetectedEvent beat_event{features.beat_strength};
+        event_bus_.publish(beat_event);
+    }
 
-    events::FrameUpdateEvent frame_event{delta_time, metrics, features, bands, beat_strength};
+    events::FrameUpdateEvent frame_event{delta_time, metrics, features};
     event_bus_.publish(frame_event);
 }
 

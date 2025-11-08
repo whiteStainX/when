@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 #include "../audio_engine.h"
 #include "audio/audio_features.h"
 
@@ -16,8 +14,6 @@ struct FrameUpdateEvent {
     float delta_time;
     const AudioMetrics& metrics;
     const AudioFeatures& features;
-    const std::vector<float>& bands;
-    float beat_strength;
 };
 
 struct BeatDetectedEvent {
