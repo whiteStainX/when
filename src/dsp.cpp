@@ -36,6 +36,10 @@ DspEngine::DspEngine(events::EventBus& event_bus,
       band_energies_(bands, 0.0f),
       band_bin_ranges_(bands),
       prev_magnitudes_(bands, 0.0f),
+      instantaneous_band_energies_(bands, 0.0f),
+      band_flux_(bands, 0.0f),
+      fft_magnitudes_(fft_size_ / 2 + 1, 0.0f),
+      fft_phases_(fft_size_ / 2 + 1, 0.0f),
       fft_cfg_(nullptr),
       fft_in_(fft_size_),
       fft_out_(fft_size_),
@@ -146,14 +150,23 @@ void DspEngine::process_frame() {
 
     kiss_fft(fft_cfg_, fft_in_.data(), fft_out_.data());
 
+    const std::size_t nyquist_bin = fft_size_ / 2;
+    for (std::size_t bin = 0; bin <= nyquist_bin; ++bin) {
+        const float real = fft_out_[bin].r * norm;
+        const float imag = fft_out_[bin].i * norm;
+        const float magnitude = std::sqrt(real * real + imag * imag);
+        fft_magnitudes_[bin] = magnitude;
+        fft_phases_[bin] = std::atan2(imag, real);
+    }
+
     float flux = 0.0f;
     for (std::size_t band = 0; band < band_bin_ranges_.size(); ++band) {
         const auto [start_bin, end_bin] = band_bin_ranges_[band];
         float energy = 0.0f;
-        for (std::size_t bin = start_bin; bin < end_bin && bin <= fft_size_ / 2; ++bin) {
-            const float real = fft_out_[bin].r * norm;
-            const float imag = fft_out_[bin].i * norm;
-            energy += real * real + imag * imag;
+        const std::size_t clamped_end = std::min(end_bin, nyquist_bin + 1);
+        for (std::size_t bin = start_bin; bin < clamped_end; ++bin) {
+            const float magnitude = fft_magnitudes_[bin];
+            energy += magnitude * magnitude;
         }
         const std::size_t bin_count = (end_bin > start_bin) ? (end_bin - start_bin) : 1;
         const float average_energy = energy / static_cast<float>(bin_count);
@@ -162,11 +175,14 @@ void DspEngine::process_frame() {
         if (band < prev_magnitudes_.size()) {
             prev_magnitudes_[band] = magnitude;
         }
-        flux += std::max(0.0f, magnitude - previous);
+        const float delta = std::max(0.0f, magnitude - previous);
+        flux += delta;
         const float current = band_energies_[band];
         const float target = magnitude;
         const float alpha = (target > current) ? smoothing_attack_ : smoothing_release_;
         band_energies_[band] = current + (target - current) * alpha;
+        instantaneous_band_energies_[band] = target;
+        band_flux_[band] = delta;
     }
 
     flux_average_ = flux_average_ * 0.92f + flux * 0.08f;
@@ -178,7 +194,15 @@ void DspEngine::process_frame() {
     beat_strength_ = std::max(beat_instant, beat_strength_ * 0.6f);
     beat_strength_ = std::clamp(beat_strength_, 0.0f, 1.0f);
 
-    latest_features_ = feature_extractor_.process(band_energies_, beat_strength_);
+    feature_input_frame_.fft_magnitudes = std::span<const float>(fft_magnitudes_);
+    feature_input_frame_.fft_phases = std::span<const float>(fft_phases_);
+    feature_input_frame_.instantaneous_band_energies =
+        std::span<const float>(instantaneous_band_energies_);
+    feature_input_frame_.smoothed_band_energies = std::span<const float>(band_energies_);
+    feature_input_frame_.band_flux = std::span<const float>(band_flux_);
+    feature_input_frame_.beat_strength = beat_strength_;
+
+    latest_features_ = feature_extractor_.process(feature_input_frame_);
     events::AudioFeaturesUpdatedEvent features_event{latest_features_};
     event_bus_.publish(features_event);
 }

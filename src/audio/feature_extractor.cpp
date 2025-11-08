@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "audio/feature_input_frame.h"
+
 namespace when {
 
 FeatureExtractor::FeatureExtractor() { reset(); }
@@ -36,34 +38,35 @@ void FeatureExtractor::set_config(const Config& config) {
     reset();
 }
 
-AudioFeatures FeatureExtractor::process(const std::vector<float>& fft_bands, float beat_strength) {
-    if (band_count_ != fft_bands.size()) {
-        prepare(fft_bands.size());
+AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
+    const auto& smoothed_bands = input_frame.smoothed_band_energies;
+    if (band_count_ != smoothed_bands.size()) {
+        prepare(smoothed_bands.size());
     }
 
     AudioFeatures features{};
-    features.beat_strength = beat_strength;
-    features.beat_detected = beat_strength >= config_.beat_detection_threshold;
+    features.beat_strength = input_frame.beat_strength;
+    features.beat_detected = input_frame.beat_strength >= config_.beat_detection_threshold;
 
-    const std::size_t band_count = fft_bands.size();
+    const std::size_t band_count = smoothed_bands.size();
     if (band_count == 0) {
         return features;
     }
 
-    if (!last_band_energies_.empty()) {
-        std::copy(fft_bands.begin(), fft_bands.end(), last_band_energies_.begin());
+    if (!last_band_energies_.empty() && band_count == last_band_energies_.size()) {
+        std::copy(smoothed_bands.begin(), smoothed_bands.end(), last_band_energies_.begin());
     }
 
     auto [bass_start, bass_end] = resolve_band_indices(band_count, config_.bass_range);
     auto [mid_start, mid_end] = resolve_band_indices(band_count, config_.mid_range);
     auto [treble_start, treble_end] = resolve_band_indices(band_count, config_.treble_range);
 
-    features.bass_energy = compute_average_energy(fft_bands, bass_start, bass_end);
-    features.mid_energy = compute_average_energy(fft_bands, mid_start, mid_end);
-    features.treble_energy = compute_average_energy(fft_bands, treble_start, treble_end);
+    features.bass_energy = compute_average_energy(smoothed_bands, bass_start, bass_end);
+    features.mid_energy = compute_average_energy(smoothed_bands, mid_start, mid_end);
+    features.treble_energy = compute_average_energy(smoothed_bands, treble_start, treble_end);
 
     double total_sum = 0.0;
-    for (float band : fft_bands) {
+    for (float band : smoothed_bands) {
         total_sum += std::max(band, 0.0f);
     }
     if (band_count > 0) {
@@ -71,7 +74,7 @@ AudioFeatures FeatureExtractor::process(const std::vector<float>& fft_bands, flo
     }
 
     if (total_sum > static_cast<double>(config_.silence_threshold)) {
-        features.spectral_centroid = compute_spectral_centroid(fft_bands, total_sum);
+        features.spectral_centroid = compute_spectral_centroid(smoothed_bands, total_sum);
     } else {
         features.spectral_centroid = 0.0f;
     }
@@ -110,7 +113,7 @@ std::pair<std::size_t, std::size_t> FeatureExtractor::resolve_band_indices(std::
     return {start, end};
 }
 
-float FeatureExtractor::compute_average_energy(const std::vector<float>& bands,
+float FeatureExtractor::compute_average_energy(std::span<const float> bands,
                                                std::size_t start,
                                                std::size_t end) {
     if (bands.empty() || start >= bands.size()) {
@@ -130,7 +133,7 @@ float FeatureExtractor::compute_average_energy(const std::vector<float>& bands,
     return (count > 0) ? static_cast<float>(sum / static_cast<double>(count)) : 0.0f;
 }
 
-float FeatureExtractor::compute_spectral_centroid(const std::vector<float>& bands,
+float FeatureExtractor::compute_spectral_centroid(std::span<const float> bands,
                                                   double total_energy_sum) const {
     if (bands.empty() || total_energy_sum <= 0.0) {
         return 0.0f;
