@@ -1,62 +1,68 @@
 # Project Architecture: `when` Audio Visualizer
 
-This document outlines the high-level architecture of the `when` audio visualizer. The design is centered around a decoupled, event-driven model that promotes modularity and extensibility.
+This document outlines the high-level architecture of the `when` audio visualizer. The design is centered around a decoupled, service-oriented model that promotes modularity and extensibility by separating audio analysis from visual representation.
 
 ## Core Modules and Their Responsibilities
 
 - **`main.cpp`**: The application entry point. It handles command-line parsing, initializes all core modules, and runs the main application loop.
 - **`AudioEngine`**: Responsible for all audio input. It captures audio from a microphone or system, or streams from a file, providing raw audio samples.
-- **`DspEngine`**: Performs digital signal processing. Its primary functions are Fast Fourier Transform (FFT), beat detection, and spectral analysis. **It acts as a primary event emitter**, publishing events like `BeatDetectedEvent` and `AudioFeaturesUpdatedEvent`.
-- **`EventBus`**: The central dispatcher for the event-driven system. It receives events from publishers and forwards them to subscribers, decoupling the components.
-- **`AnimationManager`**: Orchestrates the animation subsystem. It loads animations from the configuration, publishes the main `FrameUpdateEvent` to the `EventBus` on each frame, and manages the rendering of all active animations.
-- **`Animation` (Interface)**: The base class for all visual effects. Concrete animations inherit from this, implement their visual logic, and subscribe to events via the `bind_events` method.
+- **`DspEngine`**: Orchestrates all audio processing. It performs FFT and beat detection on the raw audio stream, then uses the `FeatureExtractor` to produce high-level musical features.
+- **`FeatureExtractor` (The Audio Feature Service)**: A self-contained service that consumes raw DSP data (FFT bands, beat strength) and produces a rich `AudioFeatures` struct. This struct is the clean, public-facing "API" of the audio engine.
+- **`EventBus`**: The central dispatcher for the event-driven system. It receives events from publishers and forwards them to subscribers, decoupling all components.
+- **`AnimationManager`**: Orchestrates the animation subsystem. It receives the latest `AudioFeatures` from the `DspEngine`, bundles them with timing data into a `FrameUpdateEvent`, publishes this event to the `EventBus`, and manages the rendering of all active animations.
+- **`Animation` (Interface)**: The base class for all visual effects. Concrete animations are **pure consumers** of the `AudioFeatures` struct. They subscribe to the `FrameUpdateEvent` and use its high-level data to drive their visual logic, without any knowledge of DSP.
 - **`Config`**: Manages application configuration, loading settings from `when.toml`.
-- **`PluginManager`**: Provides an extensible plugin system, allowing custom code to react to application events.
+- **`PluginManager`**: Provides an extensible plugin system, allowing custom code to react to application events, also consuming the `AudioFeatures` struct.
 
-## Data Flow and Interactions (Event-Driven)
+## Data Flow and Interactions (Service-Oriented)
+
+The core of the architecture is the strict separation between the **Audio Feature Service** and its **Consumers** (the animations).
 
 ```
-+-------------+   reads   +---------------+   pushes   +-------------------+
-|  main.cpp   |---------->|  AudioEngine  |----------->|     DspEngine     |
-| (Main Loop) |           +---------------+            |  (Event Emitter)  |
-+-------------+                                        +---------+---------+
-      |                                                            |
-      | 1. On each frame, calls...                                 | 2. Publishes specific
-      |                                                            |    audio events (Beat,
-      v                                                            |    Novelty, etc.)
-+------------------+  3. Publishes general    +-------------+      v
-| AnimationManager |----------------------->|             |--------------------->+--------------------+
-| (Event Emitter)  |   FrameUpdateEvent      |  EventBus   | 4. Dispatches events | Animation Instances|
-+------------------+                         |             |--------------------->| (Subscribers)      |
-                                             +-------------+                      +--------------------+
++-------------+   pushes   +-------------------+   produces   +------------------+
+| AudioEngine |----------->|     DspEngine     |------------->| FeatureExtractor |
+| (Raw Audio) |            | (FFT, Beat Strength) |              | (Audio Service)  |
++-------------+            +-------------------+              +--------+---------+
+      |                                                                |
+      | 1. In the main loop, DspEngine                                 |
+      |    is fed raw audio and...                                     | 2. ...produces a clean
+      |                                                                |    AudioFeatures struct.
+      v                                                                v
++------------------+  3. Bundles features &     +-------------+  4. Dispatches the rich
+| AnimationManager |     time into a single    |             |     FrameUpdateEvent to
+| (Event Emitter)  |-------------------------->|  EventBus   |---------------------->+--------------------+
++------------------+     FrameUpdateEvent      |             |                       | Animation Instances|
+                                               +-------------+                       | (Pure Consumers)   |
+                                                                                     +--------------------+
 ```
 
 ### Explanation of Data Flow:
 
-1.  **Audio Processing:** In the main loop, `main.cpp` reads raw audio from the `AudioEngine` and pushes it to the `DspEngine`.
-2.  **DSP Event Publishing:** The `DspEngine` analyzes the audio and publishes specific, high-level events (e.g., `BeatDetectedEvent`, `SpectralNoveltyEvent`) directly to the `EventBus`.
-3.  **Frame Event Publishing:** `main.cpp` calls `animation_manager.update_all()`, which publishes the general `FrameUpdateEvent` containing timing information, audio metrics, and the latest `AudioFeatures` snapshot.
-4.  **Event Dispatching & Animation Logic:** The `EventBus` forwards all events to the `Animation` instances that have subscribed to them. The animations react to these events to update their internal state and visuals.
-5.  **Rendering:** After events are published, `main.cpp` calls `animation_manager.render_all()`, which renders all active animations.
+1.  **Audio Processing**: In the main loop, `main.cpp` reads raw audio from the `AudioEngine` and pushes it to the `DspEngine`.
+2.  **Feature Extraction**: The `DspEngine` performs FFT and beat detection. It then passes this raw data to its internal `FeatureExtractor`, which computes a high-level `AudioFeatures` struct (containing bass, mids, treble, centroid, etc.).
+3.  **Frame Event Publishing**: `main.cpp` calls `animation_manager.update_all()`, passing it the latest `AudioFeatures`. The manager combines these features with timing data (`delta_time`) into a single, rich `FrameUpdateEvent` and publishes it to the `EventBus`.
+4.  **Event Dispatching & Animation Logic**: The `EventBus` forwards the `FrameUpdateEvent` to all subscribed `Animation` instances. The animations react *only* to the high-level data within this event (`event.features`) to update their state and visuals.
+5.  **Rendering**: After events are published, `main.cpp` calls `animation_manager.render_all()`, which renders all active animations.
 
 ## Module APIs (High-Level)
 
 ### `DspEngine`
 
-- **Constructor**: `DspEngine(sample_rate, channels, fft_size, hop_size, bands, event_bus)`
-- `push_samples(samples, count)`: Feeds raw audio for processing and triggers event publishing.
+- **Constructor**: `DspEngine(event_bus, sample_rate, ...)`
+- `push_samples(samples, count)`: Feeds raw audio for processing.
+- `audio_features() const`: **Returns the latest `AudioFeatures` struct.**
 
 ### `AnimationManager`
 
-- `load_animations(nc, app_config)`: Loads all animations from the config and calls their `bind_events` method.
-- `update_all(delta_time, metrics, features)`: Publishes the frame's general `FrameUpdateEvent`.
+- `load_animations(nc, app_config)`: Loads all animations from the config.
+- `update_all(delta_time, metrics, features)`: Publishes the frame's `FrameUpdateEvent`.
 - `render_all(nc)`: Renders all active animations.
 
 ### `Animation` (Interface)
 
 - `virtual void init(nc, config)`: For one-time setup.
-- `virtual void bind_events(config, bus)`: **Crucial method** where the animation subscribes to events from the `EventBus`.
-- `virtual void update(...)`: Logic to run on a `FrameUpdateEvent` (if subscribed).
+- `virtual void bind_events(config, bus)`: Subscribes the animation to the `FrameUpdateEvent`.
+- `virtual void update(delta_time, metrics, features)`: **The core logic method. Consumes the high-level `AudioFeatures` struct to drive visuals.**
 - `virtual void render(nc)`: Draws the animation's current state.
 
 ### `EventBus`
@@ -66,6 +72,7 @@ This document outlines the high-level architecture of the `when` audio visualize
 
 ## Design Principles
 
-- **Decoupling:** Components are independent. The `DspEngine` does not know about animations, and animations do not know where audio events originate.
-- **Modularity:** All logic for an animation is contained within its class.
-- **Extensibility:** New animations can be created and integrated without modifying core systems.
+- **Service-Oriented**: The audio analysis pipeline (`DspEngine` + `FeatureExtractor`) acts as a self-contained service. Its only public product is the `AudioFeatures` struct.
+- **Strict Decoupling**: Consumers (`Animation`, `PluginManager`) are completely ignorant of DSP concepts like FFTs or frequency bands. They are coded against the stable `AudioFeatures` "API".
+- **Single Source of Truth**: The `FeatureExtractor` is the single source of truth for all musical analysis. This prevents logic duplication and ensures all visual components react consistently.
+- **Extensibility**: A new audio feature (e.g., pitch detection) can be added by updating only the `FeatureExtractor` and the `AudioFeatures` struct, with zero impact on existing animations. A new animation can be created that instantly has access to the full suite of audio features.
