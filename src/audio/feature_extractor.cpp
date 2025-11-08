@@ -1,6 +1,7 @@
 #include "audio/feature_extractor.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numeric>
 
@@ -49,6 +50,9 @@ void FeatureExtractor::reset() {
     total_envelope_ = 0.0f;
     weighting_sample_rate_ = 0.0f;
     weighting_fft_size_ = 0;
+    chroma_sample_rate_ = 0.0f;
+    chroma_fft_size_ = 0;
+    chroma_bin_map_.clear();
 }
 
 void FeatureExtractor::set_config(const Config& config) {
@@ -187,6 +191,81 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
         features.spectral_centroid = 0.0f;
     }
 
+    if (config_.enable_spectral_flatness) {
+        std::span<const float> flatness_bins;
+        if (can_apply_weighting && !weighted_bins_.empty()) {
+            flatness_bins = std::span<const float>(weighted_bins_.data(), weighted_bins_.size());
+        } else if (!fft_bins.empty()) {
+            flatness_bins = fft_bins;
+        }
+
+        if (!flatness_bins.empty()) {
+            double log_sum = 0.0;
+            double linear_sum = 0.0;
+            std::size_t count = 0;
+            constexpr double kEpsilon = 1e-12;
+            for (float magnitude : flatness_bins) {
+                const double value = std::max(static_cast<double>(magnitude), kEpsilon);
+                log_sum += std::log(value);
+                linear_sum += value;
+                ++count;
+            }
+
+            if (count > 0 && linear_sum > kEpsilon) {
+                const double geometric_mean = std::exp(log_sum / static_cast<double>(count));
+                const double arithmetic_mean = linear_sum / static_cast<double>(count);
+                const double ratio = (arithmetic_mean > kEpsilon) ? (geometric_mean / arithmetic_mean) : 0.0;
+                features.spectral_flatness = static_cast<float>(std::clamp(ratio, 0.0, 1.0));
+            } else {
+                features.spectral_flatness = 0.0f;
+            }
+        } else {
+            features.spectral_flatness = 0.0f;
+        }
+    } else {
+        features.spectral_flatness = 0.0f;
+    }
+
+    if (config_.enable_chroma && can_apply_weighting && !weighted_bins_.empty()) {
+        update_chroma_mapping(weighted_bins_.size(), input_frame.sample_rate, (weighted_bins_.size() > 0) ? (weighted_bins_.size() - 1) * 2 : 0);
+
+        std::array<float, 12> chroma_accumulator{};
+        double total_energy = 0.0;
+        constexpr double kEnergyFloor = 1e-12;
+
+        const std::size_t usable_bins = std::min(weighted_bins_.size(), chroma_bin_map_.size());
+        for (std::size_t bin = 0; bin < usable_bins; ++bin) {
+            const std::uint8_t pitch_class = chroma_bin_map_[bin];
+            if (pitch_class >= 12) {
+                continue;
+            }
+
+            const double magnitude = static_cast<double>(weighted_bins_[bin]);
+            if (magnitude <= 0.0) {
+                continue;
+            }
+
+            const double energy = magnitude * magnitude;
+            chroma_accumulator[pitch_class] += static_cast<float>(energy);
+            total_energy += energy;
+        }
+
+        if (total_energy > kEnergyFloor) {
+            const float normalization = static_cast<float>(1.0 / total_energy);
+            for (float& value : chroma_accumulator) {
+                value *= normalization;
+            }
+            features.chroma = chroma_accumulator;
+            features.chroma_available = true;
+        } else {
+            features.chroma = {};
+            features.chroma_available = false;
+        }
+    } else {
+        features.chroma = {};
+        features.chroma_available = false;
+    }
+
     float onset_strength = 0.0f;
     bool aggregated_onset = false;
     const std::span<const float> band_flux = input_frame.band_flux;
@@ -275,6 +354,59 @@ void FeatureExtractor::update_weighting_curve(std::size_t fft_bin_count,
     for (std::size_t bin = 0; bin < fft_bin_count; ++bin) {
         const double frequency = bin_width * static_cast<double>(bin);
         weighting_curve_[bin] = compute_a_weighting_coefficient(frequency);
+    }
+}
+
+void FeatureExtractor::update_chroma_mapping(std::size_t fft_bin_count,
+                                             float sample_rate,
+                                             std::size_t fft_size) {
+    if (fft_bin_count == 0 || sample_rate <= 0.0f || fft_size == 0) {
+        chroma_bin_map_.assign(fft_bin_count, 0xFFu);
+        chroma_sample_rate_ = sample_rate;
+        chroma_fft_size_ = fft_size;
+        return;
+    }
+
+    if (chroma_bin_map_.size() == fft_bin_count && chroma_sample_rate_ == sample_rate && chroma_fft_size_ == fft_size) {
+        return;
+    }
+
+    chroma_bin_map_.assign(fft_bin_count, 0xFFu);
+    chroma_sample_rate_ = sample_rate;
+    chroma_fft_size_ = fft_size;
+
+    const double sr = static_cast<double>(sample_rate);
+    const double fft = static_cast<double>(fft_size);
+    const double bin_width = (fft > 0.0) ? sr / fft : 0.0;
+    if (bin_width <= 0.0) {
+        return;
+    }
+
+    const double min_frequency = static_cast<double>(std::max(std::min(config_.chroma_min_frequency, config_.chroma_max_frequency), 0.0f));
+    const double max_frequency = static_cast<double>(std::max({config_.chroma_min_frequency, config_.chroma_max_frequency, 0.0f}));
+
+    if (min_frequency >= max_frequency) {
+        return;
+    }
+
+    for (std::size_t bin = 0; bin < fft_bin_count; ++bin) {
+        const double frequency = bin_width * static_cast<double>(bin);
+        if (frequency < min_frequency || frequency > max_frequency) {
+            continue;
+        }
+
+        if (frequency <= 0.0) {
+            continue;
+        }
+
+        const double midi_note = 69.0 + 12.0 * std::log2(frequency / 440.0);
+        const int rounded_note = static_cast<int>(std::lround(midi_note));
+        int pitch_class = rounded_note % 12;
+        if (pitch_class < 0) {
+            pitch_class += 12;
+        }
+
+        chroma_bin_map_[bin] = static_cast<std::uint8_t>(pitch_class);
     }
 }
 

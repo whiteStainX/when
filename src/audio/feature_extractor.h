@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <utility>
 #include <vector>
@@ -36,6 +37,10 @@ public:
         float tempo_confidence_threshold = 1e-4f;
         float beat_phase_realign = 0.25f;
         std::size_t beats_per_bar = 4;
+        bool enable_spectral_flatness = true;
+        bool enable_chroma = true;
+        float chroma_min_frequency = 32.703f;  // C1
+        float chroma_max_frequency = 4186.01f; // C8
     };
 
     FeatureExtractor();
@@ -52,6 +57,7 @@ public:
 private:
     void ensure_band_capacity(std::size_t band_count);
     void update_weighting_curve(std::size_t fft_bin_count, float sample_rate, std::size_t fft_size);
+    void update_chroma_mapping(std::size_t fft_bin_count, float sample_rate, std::size_t fft_size);
     float apply_envelope(float target, float& state) const;
     void resize_onset_history(std::size_t desired_length);
     bool update_tempo_tracking(float onset_strength,
@@ -88,6 +94,7 @@ private:
     std::vector<float> onset_history_;
     std::vector<float> onset_history_linear_;
     std::vector<float> band_flux_baseline_;
+    std::vector<std::uint8_t> chroma_bin_map_;
     std::size_t onset_history_write_pos_ = 0;
     TempoTrackerState tempo_state_{};
     float bass_envelope_ = 0.0f;
@@ -96,6 +103,8 @@ private:
     float total_envelope_ = 0.0f;
     float weighting_sample_rate_ = 0.0f;
     std::size_t weighting_fft_size_ = 0;
+    float chroma_sample_rate_ = 0.0f;
+    std::size_t chroma_fft_size_ = 0;
     int beat_counter_in_bar_ = 0;
 };
 
