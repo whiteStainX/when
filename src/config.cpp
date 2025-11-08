@@ -161,6 +161,7 @@ void populate_runtime_config(const RawConfig& raw,
                              RuntimeConfig& runtime,
                              std::vector<std::string>& warnings) {
     using config::detail::parse_bool;
+    using config::detail::parse_double;
     assign_scalar(raw, "runtime.show_metrics", runtime.show_metrics, parse_bool, warnings);
     assign_scalar(raw, "runtime.allow_resize", runtime.allow_resize, parse_bool, warnings);
     assign_scalar(raw, "runtime.beat_flash", runtime.beat_flash, parse_bool, warnings);
@@ -169,6 +170,17 @@ void populate_runtime_config(const RawConfig& raw,
                   runtime.show_overlay_metrics,
                   parse_bool,
                   warnings);
+    assign_scalar(raw,
+                  "runtime.band_feature_logging",
+                  runtime.band_feature_logging,
+                  parse_bool,
+                  warnings);
+    assign_scalar(raw,
+                  "runtime.band_feature_logging_duration_s",
+                  runtime.band_feature_logging_duration_s,
+                  parse_double,
+                  warnings);
+    assign_string(raw, "runtime.band_feature_log_file", runtime.band_feature_log_file);
 }
 
 void populate_plugin_config(const RawConfig& raw,

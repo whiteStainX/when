@@ -57,6 +57,9 @@ struct RuntimeConfig {
     bool allow_resize = true;
     bool beat_flash = true;
     bool show_overlay_metrics = false; // New config option, default to false
+    bool band_feature_logging = false;
+    double band_feature_logging_duration_s = 0.0;
+    std::string band_feature_log_file;
 };
 
 struct PluginConfig {

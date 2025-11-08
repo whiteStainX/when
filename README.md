@@ -54,8 +54,15 @@ A real-time, music-responsive terminal visualization inspired by the iconic "Unk
     ```
 
 4.  **Run the visualizer:**
+
     ```sh
     ./build/when
+    ```
+
+5.  **Test**
+    ```sh
+    cd build
+    ctest --output-on-failure
     ```
 
 ## Configuration
