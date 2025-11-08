@@ -25,6 +25,7 @@ set(WHEN_SOURCES
   src/config/animation_config_parser.cpp
   src/plugins.cpp
   src/renderer.cpp
+  src/audio/feature_extractor.cpp
   src/dsp.cpp
   src/animations/ascii_matrix_animation.cpp
   src/animations/pleasure_animation.cpp
@@ -50,3 +51,12 @@ target_include_directories(when PRIVATE
 
 # --- link notcurses (and its transitive deps) ---
 target_link_libraries(when PRIVATE PkgConfig::NOTCURSES)
+
+add_executable(feature_extractor_sanity
+  extra/feature_extractor_sanity.cpp
+  src/audio/feature_extractor.cpp
+)
+
+target_include_directories(feature_extractor_sanity PRIVATE
+  src
+)
