@@ -184,14 +184,12 @@ int main(int argc, char** argv) {
             audio_metrics.dropped = audio.dropped_samples();
         }
 
-        plugin_manager.notify_frame(audio_metrics, dsp.band_energies(), dsp.beat_strength(), time_s);
+        plugin_manager.notify_frame(audio_metrics, dsp.audio_features(), time_s);
 
         when::render_frame(nc,
                        time_s,
                        audio_metrics,
                        dsp.audio_features(),
-                       dsp.band_energies(),
-                       dsp.beat_strength(),
                        audio.using_file_stream(),
                        config.runtime.show_metrics,
                        config.runtime.show_overlay_metrics);

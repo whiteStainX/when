@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "audio_engine.h"
+#include "audio/audio_features.h"
 #include "config.h"
 
 namespace when {
@@ -17,8 +18,7 @@ public:
     virtual std::string id() const = 0;
     virtual void on_load(const AppConfig& config) = 0;
     virtual void on_frame(const AudioMetrics& metrics,
-                          const std::vector<float>& bands,
-                          float beat_strength,
+                          const AudioFeatures& features,
                           double time_s) = 0;
 };
 
@@ -29,8 +29,7 @@ public:
     void register_factory(const std::string& id, PluginFactory factory);
     void load_from_config(const AppConfig& config);
     void notify_frame(const AudioMetrics& metrics,
-                      const std::vector<float>& bands,
-                      float beat_strength,
+                      const AudioFeatures& features,
                       double time_s);
 
     const std::vector<std::string>& warnings() const { return warnings_; }

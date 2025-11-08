@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 #include <notcurses/notcurses.h>
 
 #include "audio/audio_features.h"
@@ -16,8 +14,6 @@ void render_frame(notcurses* nc,
                float time_s,
                const AudioMetrics& metrics,
                const AudioFeatures& features,
-               const std::vector<float>& bands,
-               float beat_strength,
                bool file_stream,
                bool show_metrics,
                bool show_overlay_metrics);

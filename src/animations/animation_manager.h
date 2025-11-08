@@ -22,9 +22,7 @@ public:
     void load_animations(notcurses* nc, const AppConfig& config);
     void update_all(float delta_time,
                     const AudioMetrics& metrics,
-                    const AudioFeatures& features,
-                    const std::vector<float>& bands,
-                    float beat_strength);
+                    const AudioFeatures& features);
     void render_all(notcurses* nc);
 
     events::EventBus& event_bus() { return event_bus_; }

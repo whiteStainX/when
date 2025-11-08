@@ -200,48 +200,57 @@ void AsciiMatrixAnimation::deactivate() {
 
 void AsciiMatrixAnimation::update(float /*delta_time*/,
                                   const AudioMetrics& /*metrics*/,
-                                  const std::vector<float>& bands,
-                                  float beat_strength) {
+                                  const AudioFeatures& features) {
     if (!plane_ || !is_active_) {
         return;
     }
 
-    latest_beat_strength_ = beat_strength;
+    latest_beat_strength_ = features.beat_strength;
 
     const std::size_t cell_count = static_cast<std::size_t>(matrix_rows_) * static_cast<std::size_t>(matrix_cols_);
     if (cell_values_.size() != cell_count) {
         cell_values_.assign(cell_count, 0.0f);
     }
 
-    if (bands.empty()) {
-        std::fill(cell_values_.begin(), cell_values_.end(), 0.0f);
-        return;
+    const float components[3] = {features.bass_energy, features.mid_energy, features.treble_energy};
+    float normalization = std::max({components[0], components[1], components[2], features.total_energy});
+    if (normalization <= 0.0f) {
+        normalization = 1.0f;
     }
 
-    float max_energy = 0.0f;
-    for (float energy : bands) {
-        max_energy = std::max(max_energy, energy);
-    }
-
-    const bool beat_active = beat_strength >= beat_threshold_;
+    const bool beat_active = features.beat_detected || features.beat_strength >= beat_threshold_;
 
     for (std::size_t idx = 0; idx < cell_count; ++idx) {
-        const float normalized_position = static_cast<float>(idx) / static_cast<float>(cell_count);
-        std::size_t band_index = static_cast<std::size_t>(std::floor(normalized_position * static_cast<float>(bands.size())));
-        if (band_index >= bands.size()) {
-            band_index = bands.size() - 1;
+        const std::size_t row = matrix_cols_ > 0 ? idx / static_cast<std::size_t>(matrix_cols_) : 0u;
+        const std::size_t col = matrix_cols_ > 0 ? idx % static_cast<std::size_t>(matrix_cols_) : 0u;
+
+        float column_ratio = 0.0f;
+        if (matrix_cols_ > 0) {
+            column_ratio = static_cast<float>(col) / static_cast<float>(std::max(matrix_cols_ - 1, 1));
         }
 
-        float value = bands[band_index];
-        if (max_energy > 0.0f) {
-            value /= max_energy;
+        std::size_t component_index = 0u;
+        if (column_ratio >= 0.66f) {
+            component_index = 2u;
+        } else if (column_ratio >= 0.33f) {
+            component_index = 1u;
         }
+
+        float value = components[component_index] / normalization;
+
+        if (matrix_rows_ > 1) {
+            const float vertical_falloff = 1.0f - static_cast<float>(row) / static_cast<float>(matrix_rows_ - 1);
+            value *= 0.65f + 0.35f * std::max(0.0f, vertical_falloff);
+        }
+
+        const float centroid_bias = std::max(0.0f, 1.0f - std::fabs(column_ratio - features.spectral_centroid));
+        value *= 0.7f + 0.3f * centroid_bias;
 
         if (beat_active) {
             value = std::min(1.0f, value * beat_boost_);
         }
 
-        cell_values_[idx] = value;
+        cell_values_[idx] = std::clamp(value, 0.0f, 1.0f);
     }
 }
 
