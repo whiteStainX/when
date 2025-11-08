@@ -22,6 +22,7 @@ public:
     void load_animations(notcurses* nc, const AppConfig& config);
     void update_all(float delta_time,
                     const AudioMetrics& metrics,
+                    const AudioFeatures& features,
                     const std::vector<float>& bands,
                     float beat_strength);
     void render_all(notcurses* nc);

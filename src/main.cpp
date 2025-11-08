@@ -189,6 +189,7 @@ int main(int argc, char** argv) {
         when::render_frame(nc,
                        time_s,
                        audio_metrics,
+                       dsp.audio_features(),
                        dsp.band_energies(),
                        dsp.beat_strength(),
                        audio.using_file_stream(),
