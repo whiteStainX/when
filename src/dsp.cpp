@@ -17,12 +17,14 @@ constexpr float kMinDisplayFrequency = 20.0f;
 constexpr float kPi = 3.14159265358979323846f;
 } // namespace
 
-DspEngine::DspEngine(std::uint32_t sample_rate,
+DspEngine::DspEngine(events::EventBus& event_bus,
+                     std::uint32_t sample_rate,
                      std::uint32_t channels,
                      std::size_t fft_size,
                      std::size_t hop_size,
                      std::size_t bands)
-    : sample_rate_(sample_rate),
+    : event_bus_(event_bus),
+      sample_rate_(sample_rate),
       channels_(channels),
       fft_size_(fft_size),
       hop_size_(hop_size),

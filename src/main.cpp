@@ -15,6 +15,7 @@
 #include "dsp.h"
 #include "plugins.h"
 #include "renderer.h"
+#include "events/event_bus.h"
 int main(int argc, char** argv) {
     std::setlocale(LC_ALL, "");
 
@@ -117,7 +118,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    when::DspEngine dsp(sample_rate,
+    when::events::EventBus event_bus;
+
+    when::DspEngine dsp(event_bus,
+                       sample_rate,
                        channels,
                        config.dsp.fft_size,
                        config.dsp.hop_size,

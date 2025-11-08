@@ -12,13 +12,18 @@ extern "C" {
 
 namespace when {
 
+namespace events {
+class EventBus;
+} // namespace events
+
 class DspEngine {
 public:
     static constexpr std::size_t kDefaultFftSize = 1024;
     static constexpr std::size_t kDefaultHopSize = kDefaultFftSize / 2;
     static constexpr std::size_t kDefaultBands = 16;
 
-    DspEngine(std::uint32_t sample_rate,
+    DspEngine(events::EventBus& event_bus,
+              std::uint32_t sample_rate,
               std::uint32_t channels,
               std::size_t fft_size = kDefaultFftSize,
               std::size_t hop_size = kDefaultHopSize,
@@ -33,6 +38,8 @@ public:
 private:
     void compute_band_ranges();
     void process_frame();
+
+    events::EventBus& event_bus_;
 
     std::uint32_t sample_rate_;
     std::uint32_t channels_;
