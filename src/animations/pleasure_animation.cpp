@@ -21,9 +21,12 @@ constexpr int kBrailleColsPerCell = 2;
 constexpr float kTwoPi = 6.28318530717958647692f;
 } // namespace
 
+// Constructs the animation and seeds the internal RNG so ridge behavior is varied
+// across runs.
 PleasureAnimation::PleasureAnimation()
     : rng_(std::random_device{}()) {}
 
+// Cleans up any allocated notcurses plane when the animation is destroyed.
 PleasureAnimation::~PleasureAnimation() {
     if (plane_) {
         ncplane_destroy(plane_);
@@ -31,6 +34,8 @@ PleasureAnimation::~PleasureAnimation() {
     }
 }
 
+// Creates or resizes the output plane, ingests configuration, and resets runtime
+// bookkeeping that depends on geometry or audio history.
 void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
     if (plane_) {
         ncplane_destroy(plane_);
@@ -110,6 +115,8 @@ void PleasureAnimation::init(notcurses* nc, const AppConfig& config) {
     downbeat_flash_ = 0.0f;
 }
 
+// Advances the waveforms by ingesting fresh audio analysis and smoothing the resulting
+// target values so the motion remains fluid.
 void PleasureAnimation::update(float delta_time,
                                const AudioMetrics& /*metrics*/,
                                const AudioFeatures& features) {
@@ -285,6 +292,10 @@ void PleasureAnimation::update(float delta_time,
                 ridge.noise_timer = 0.0f;
                 ridge.noise_interval =
                     random_between(params_.ridge_interval_min * 0.65f, params_.ridge_interval_max * 0.85f);
+                // Refresh the magnitude jitter on strong band hits to keep the ridges lively.
+                ridge.magnitude_jitter = std::max(0.05f, 1.0f +
+                                                           random_between(-params_.ridge_magnitude_jitter,
+                                                                          params_.ridge_magnitude_jitter));
             }
 
             if (ridge.noise_timer >= ridge.noise_interval) {
@@ -310,7 +321,9 @@ void PleasureAnimation::update(float delta_time,
             const float beat_boost = 1.0f + ridge.beat_emphasis;
             const float highlight_boost = 1.0f + line.highlight_strength * highlight_factor;
             const float raw_ridge = global_magnitude_ * depth_scale * beat_boost * highlight_boost;
-            ridge.target_magnitude = soft_clip(raw_ridge, ridge_headroom);
+            // Apply ridge-specific jitter so each ridge responds with a slightly different
+            // amplitude, echoing the hand-drawn look of the album cover.
+            ridge.target_magnitude = soft_clip(raw_ridge * ridge.magnitude_jitter, ridge_headroom);
 
             ridge.current_pos += (ridge.target_pos - ridge.current_pos) * params_.ridge_position_smoothing;
             ridge.current_magnitude += (ridge.target_magnitude - ridge.current_magnitude) *
@@ -349,6 +362,8 @@ void PleasureAnimation::update(float delta_time,
     }
 }
 
+// Draws the current line profiles onto the notcurses plane using Braille glyphs while
+// skipping work if the plane is inactive or has zero area.
 void PleasureAnimation::render(notcurses* /*nc*/) {
     if (!plane_ || !is_active_) {
         return;
@@ -432,10 +447,12 @@ void PleasureAnimation::render(notcurses* /*nc*/) {
     blit_braille_cells(plane_, braille_cells, rows, cols);
 }
 
+// Marks the animation as active so `render` will emit geometry.
 void PleasureAnimation::activate() {
     is_active_ = true;
 }
 
+// Clears the plane and marks the animation inactive so it no longer draws.
 void PleasureAnimation::deactivate() {
     is_active_ = false;
     if (plane_) {
@@ -443,10 +460,13 @@ void PleasureAnimation::deactivate() {
     }
 }
 
+// Subscribes to the shared event bus so the animation receives frame updates.
 void PleasureAnimation::bind_events(const AnimationConfig& config, events::EventBus& bus) {
     bind_standard_frame_updates(this, config, bus);
 }
 
+// Builds the per-line data structures based on the current plane size and history
+// capacity.
 void PleasureAnimation::initialize_line_states() {
     lines_.clear();
 
@@ -477,6 +497,7 @@ void PleasureAnimation::initialize_line_states() {
     }
 }
 
+// Randomizes ridge positions and timing so each line starts from a unique baseline.
 void PleasureAnimation::initialize_line(LineState& line_state) {
     line_state.ridges.clear();
 
@@ -495,8 +516,14 @@ void PleasureAnimation::initialize_line(LineState& line_state) {
         RidgeState ridge{};
         ridge.current_pos = pos;
         ridge.target_pos = pos;
-        ridge.current_magnitude = 0.0f;
-        ridge.target_magnitude = 0.0f;
+        // Seed each ridge with a persistent magnitude jitter so adjacent ridges vary in
+        // height even when driven by the same envelope.
+        const float jitter = std::max(0.05f, 1.0f +
+                                              random_between(-params_.ridge_magnitude_jitter,
+                                                             params_.ridge_magnitude_jitter));
+        ridge.magnitude_jitter = jitter;
+        ridge.current_magnitude = jitter * 0.1f;
+        ridge.target_magnitude = ridge.current_magnitude;
         ridge.noise_timer = random_between(0.0f, params_.ridge_interval_min);
         ridge.noise_interval = random_between(params_.ridge_interval_min, params_.ridge_interval_max);
         ridge.base_pos = pos;
@@ -509,6 +536,8 @@ void PleasureAnimation::initialize_line(LineState& line_state) {
     }
 }
 
+// Generates a random floating-point value within [min_value, max_value], swapping the
+// bounds if they are provided in reverse order.
 float PleasureAnimation::random_between(float min_value, float max_value) {
     if (min_value > max_value) {
         std::swap(min_value, max_value);
@@ -517,6 +546,8 @@ float PleasureAnimation::random_between(float min_value, float max_value) {
     return dist(rng_);
 }
 
+// Copies configuration values from the animation config structure into runtime
+// parameters, clamping them to sensible domains to preserve stability.
 void PleasureAnimation::load_parameters_from_config(const AnimationConfig& config_entry) {
     auto clamp_unit = [](float value) { return std::clamp(value, 0.0f, 1.0f); };
 
@@ -573,14 +604,16 @@ void PleasureAnimation::load_parameters_from_config(const AnimationConfig& confi
     params_.max_downward_excursion = std::max(0, config_entry.pleasure_max_downward_excursion);
 }
 
+// Draws a line segment into the Braille buffer using Bresenham's algorithm while keeping
+// track of a skyline to avoid overdrawing pixels that should remain hidden.
 void PleasureAnimation::draw_occluded_line(std::vector<uint8_t>& cells,
-                                           unsigned int cell_rows,
-                                           unsigned int cell_cols,
-                                           int y1,
-                                           int x1,
-                                           int y2,
-                                           int x2,
-                                           std::vector<int>& skyline_buffer) {
+                            unsigned int cell_rows,
+                            unsigned int cell_cols,
+                            int y1,
+                            int x1,
+                            int y2,
+                            int x2,
+                            std::vector<int>& skyline_buffer) {
     if (cells.empty() || cell_rows == 0u || cell_cols == 0u) {
         return;
     }
@@ -646,6 +679,7 @@ void PleasureAnimation::draw_occluded_line(std::vector<uint8_t>& cells,
     }
 }
 
+// Activates a single Braille dot corresponding to the specified pixel coordinates.
 void PleasureAnimation::set_braille_pixel(std::vector<uint8_t>& cells,
                                           unsigned int cell_cols,
                                           int y,
@@ -674,6 +708,8 @@ void PleasureAnimation::set_braille_pixel(std::vector<uint8_t>& cells,
     cells[index] |= kDotMasks[sub_y][sub_x];
 }
 
+// Emits the Braille buffer to the notcurses plane by translating dot masks to Unicode
+// characters.
 void PleasureAnimation::blit_braille_cells(ncplane* plane,
                                            const std::vector<uint8_t>& cells,
                                            unsigned int cell_rows,
@@ -700,6 +736,8 @@ void PleasureAnimation::blit_braille_cells(ncplane* plane,
     }
 }
 
+// Creates a new plane sized to the requested geometry, destroying any previous one to
+// ensure the animation renders with up-to-date bounds.
 void PleasureAnimation::create_or_resize_plane(notcurses* nc) {
     if (!nc) {
         return;
@@ -732,6 +770,8 @@ void PleasureAnimation::create_or_resize_plane(notcurses* nc) {
     }
 }
 
+// Calculates the number of samples needed to span the plane width in Braille pixels and
+// reinitializes all dependent line state.
 void PleasureAnimation::configure_history_capacity() {
     history_capacity_ = 0u;
 

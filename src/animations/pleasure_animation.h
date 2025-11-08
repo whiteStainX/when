@@ -71,6 +71,7 @@ private:
         float target_pos = 0.0f;
         float current_magnitude = 0.0f;
         float target_magnitude = 0.0f;
+        float magnitude_jitter = 1.0f;
         float noise_timer = 0.0f;
         float noise_interval = 0.0f;
         float base_pos = 0.0f;
