@@ -138,6 +138,16 @@ void populate_dsp_config(const RawConfig& raw,
                   parse_float32,
                   warnings);
     assign_scalar(raw, "dsp.enable_flux", dsp.enable_flux, parse_bool, warnings);
+    assign_scalar(raw,
+                  "dsp.enable_spectral_flatness",
+                  dsp.enable_spectral_flatness,
+                  parse_bool,
+                  warnings);
+    assign_scalar(raw,
+                  "dsp.enable_chroma",
+                  dsp.enable_chroma,
+                  parse_bool,
+                  warnings);
 }
 
 void populate_visual_config(const RawConfig& raw,

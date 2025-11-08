@@ -42,6 +42,8 @@ struct DspConfig {
     float smoothing_release = 0.05f;
     float beat_sensitivity = 1.0f;
     bool enable_flux = true;
+    bool enable_spectral_flatness = true;
+    bool enable_chroma = true;
 };
 
 struct VisualConfig {

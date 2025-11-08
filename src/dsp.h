@@ -31,7 +31,8 @@ public:
               std::uint32_t channels,
               std::size_t fft_size = kDefaultFftSize,
               std::size_t hop_size = kDefaultHopSize,
-              std::size_t bands = kDefaultBands);
+              std::size_t bands = kDefaultBands,
+              FeatureExtractor::Config feature_config = FeatureExtractor::Config{});
     ~DspEngine();
 
     void push_samples(const float* interleaved_samples, std::size_t count);

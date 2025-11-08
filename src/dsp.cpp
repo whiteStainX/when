@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 extern "C" {
@@ -26,7 +27,8 @@ DspEngine::DspEngine(events::EventBus& event_bus,
                      std::uint32_t channels,
                      std::size_t fft_size,
                      std::size_t hop_size,
-                     std::size_t bands)
+                     std::size_t bands,
+                     FeatureExtractor::Config feature_config)
     : event_bus_(event_bus),
       sample_rate_(sample_rate),
       channels_(channels),
@@ -40,6 +42,7 @@ DspEngine::DspEngine(events::EventBus& event_bus,
       band_flux_(bands, 0.0f),
       fft_magnitudes_(fft_size_ / 2 + 1, 0.0f),
       fft_phases_(fft_size_ / 2 + 1, 0.0f),
+      feature_extractor_(std::move(feature_config)),
       fft_cfg_(nullptr),
       fft_in_(fft_size_),
       fft_out_(fft_size_),
