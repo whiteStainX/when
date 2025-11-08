@@ -10,6 +10,9 @@ extern "C" {
 #include <kiss_fft.h>
 }
 
+#include "events/event_bus.h"
+#include "events/frame_events.h"
+
 namespace when {
 
 namespace {
@@ -173,6 +176,10 @@ void DspEngine::process_frame() {
     }
     beat_strength_ = std::max(beat_instant, beat_strength_ * 0.6f);
     beat_strength_ = std::clamp(beat_strength_, 0.0f, 1.0f);
+
+    latest_features_ = feature_extractor_.process(band_energies_, beat_strength_);
+    events::AudioFeaturesUpdatedEvent features_event{latest_features_};
+    event_bus_.publish(features_event);
 }
 
 } // namespace when

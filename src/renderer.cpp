@@ -20,6 +20,7 @@ void load_animations_from_config(notcurses* nc, const AppConfig& config) {
 void render_frame(notcurses* nc,
                float time_s,
                const AudioMetrics& metrics,
+               const AudioFeatures& features,
                const std::vector<float>& bands,
                float beat_strength,
                bool file_stream,
@@ -49,7 +50,7 @@ void render_frame(notcurses* nc,
     previous_time_s = time_s;
 
     // Update and render all animations managed by the AnimationManager
-    animation_manager.update_all(delta_time, metrics, bands, beat_strength);
+    animation_manager.update_all(delta_time, metrics, features, bands, beat_strength);
     animation_manager.render_all(nc);
 
     // Display overlay metrics if requested

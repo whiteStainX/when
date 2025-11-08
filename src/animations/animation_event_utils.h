@@ -28,13 +28,13 @@ inline bool evaluate_band_condition(const AnimationConfig& config,
     return bands[static_cast<std::size_t>(index)] >= config.trigger_threshold;
 }
 
-inline bool evaluate_beat_condition(const AnimationConfig& config, float beat_strength) {
+inline bool evaluate_beat_condition(const AnimationConfig& config, const AudioFeatures& features) {
     if (config.trigger_beat_min <= 0.0f && config.trigger_beat_max >= 1.0f) {
         return true;
     }
 
-    return beat_strength >= config.trigger_beat_min &&
-           beat_strength <= config.trigger_beat_max;
+    return features.beat_strength >= config.trigger_beat_min &&
+           features.beat_strength <= config.trigger_beat_max;
 }
 
 template<typename AnimationT>
@@ -45,7 +45,7 @@ void bind_standard_frame_updates(AnimationT* animation,
     auto handle = bus.subscribe<events::FrameUpdateEvent>(
         [animation, captured_config](const events::FrameUpdateEvent& event) {
             const bool meets_band = evaluate_band_condition(captured_config, event.bands);
-            const bool meets_beat = evaluate_beat_condition(captured_config, event.beat_strength);
+            const bool meets_beat = evaluate_beat_condition(captured_config, event.features);
             const bool should_be_active = has_custom_triggers(captured_config)
                                               ? (meets_band && meets_beat)
                                               : captured_config.initially_active;

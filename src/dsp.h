@@ -6,6 +6,9 @@
 #include <utility>
 #include <vector>
 
+#include "audio/audio_features.h"
+#include "audio/feature_extractor.h"
+
 extern "C" {
 #include <kiss_fft.h>
 }
@@ -34,6 +37,7 @@ public:
 
     const std::vector<float>& band_energies() const { return band_energies_; }
     float beat_strength() const { return beat_strength_; }
+    const AudioFeatures& audio_features() const { return latest_features_; }
 
 private:
     void compute_band_ranges();
@@ -53,6 +57,9 @@ private:
     std::vector<float> band_energies_;
     std::vector<std::pair<std::size_t, std::size_t>> band_bin_ranges_;
     std::vector<float> prev_magnitudes_;
+
+    FeatureExtractor feature_extractor_;
+    AudioFeatures latest_features_{};
 
     kiss_fft_cfg fft_cfg_;
     std::vector<kiss_fft_cpx> fft_in_;

@@ -4,6 +4,7 @@
 
 #include <notcurses/notcurses.h>
 
+#include "audio/audio_features.h"
 #include "audio_engine.h"
 #include "animations/animation.h"
 #include "animations/animation_manager.h" // Include AnimationManager
@@ -14,6 +15,7 @@ namespace when {
 void render_frame(notcurses* nc,
                float time_s,
                const AudioMetrics& metrics,
+               const AudioFeatures& features,
                const std::vector<float>& bands,
                float beat_strength,
                bool file_stream,
