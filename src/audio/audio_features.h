@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <span>
 
 namespace when {
@@ -33,6 +34,9 @@ struct AudioFeatures {
 
     // Spectral Features
     float spectral_centroid = 0.0f; // Represents the "brightness" of the sound
+    float spectral_flatness = 0.0f; // Ratio describing tonal vs. noisy content
+    std::array<float, 12> chroma{};  // Normalized chroma vector (C through B)
+    bool chroma_available = false;  // True when the chroma vector contains valid data
 
     // Raw analysis context
     std::span<const float> band_flux; // Per-band spectral flux deltas from the DSP stage
