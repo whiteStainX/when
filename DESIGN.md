@@ -14,6 +14,12 @@ This document outlines the high-level architecture of the `when` audio visualize
 - **`Config`**: Manages application configuration, loading settings from `when.toml`.
 - **`PluginManager`**: Provides an extensible plugin system, allowing custom code to react to application events, also consuming the `AudioFeatures` struct.
 
+### Energy Smoothing Ownership
+
+- The DSP layer now forwards **instantaneous** log-band magnitudes directly to the `FeatureExtractor`.
+- The `FeatureExtractor` applies attack/release envelope smoothing for every band, ensuring a single source of truth for smoothed energies.
+- Downstream consumers receive both instantaneous and smoothed band energies via the `AudioFeatures` struct, allowing visuals to pick the response that best suits their needs.
+
 ## Data Flow and Interactions (Service-Oriented)
 
 The core of the architecture is the strict separation between the **Audio Feature Service** and its **Consumers** (the animations).

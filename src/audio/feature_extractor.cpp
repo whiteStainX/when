@@ -19,7 +19,6 @@ void FeatureExtractor::prepare(std::size_t band_count) {
 void FeatureExtractor::reset() {
     if (band_count_ > 0) {
         std::fill(band_envelopes_.begin(), band_envelopes_.end(), 0.0f);
-        std::fill(last_band_energies_.begin(), last_band_energies_.end(), 0.0f);
     }
     if (onset_history_.empty()) {
         onset_history_.resize(kDefaultOnsetHistoryLength, 0.0f);
@@ -39,42 +38,66 @@ void FeatureExtractor::set_config(const Config& config) {
 }
 
 AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
-    const auto& smoothed_bands = input_frame.smoothed_band_energies;
-    if (band_count_ != smoothed_bands.size()) {
-        prepare(smoothed_bands.size());
+    const auto instantaneous_bands = input_frame.instantaneous_band_energies;
+    const auto smoothed_from_dsp = input_frame.smoothed_band_energies;
+    const bool has_instantaneous = !instantaneous_bands.empty();
+    const auto bands = has_instantaneous ? instantaneous_bands : smoothed_from_dsp;
+
+    if (band_count_ != bands.size()) {
+        prepare(bands.size());
     }
 
     AudioFeatures features{};
     features.beat_strength = input_frame.beat_strength;
     features.beat_detected = input_frame.beat_strength >= config_.beat_detection_threshold;
 
-    const std::size_t band_count = smoothed_bands.size();
+    const std::size_t band_count = bands.size();
     if (band_count == 0) {
         return features;
     }
 
-    if (!last_band_energies_.empty() && band_count == last_band_energies_.size()) {
-        std::copy(smoothed_bands.begin(), smoothed_bands.end(), last_band_energies_.begin());
+    for (std::size_t i = 0; i < band_count; ++i) {
+        const float target = std::max(bands[i], 0.0f);
+        float& envelope = band_envelopes_[i];
+        const float alpha = (target > envelope) ? config_.smoothing_attack : config_.smoothing_release;
+        envelope += (target - envelope) * alpha;
     }
 
     auto [bass_start, bass_end] = resolve_band_indices(band_count, config_.bass_range);
     auto [mid_start, mid_end] = resolve_band_indices(band_count, config_.mid_range);
     auto [treble_start, treble_end] = resolve_band_indices(band_count, config_.treble_range);
 
-    features.bass_energy = compute_average_energy(smoothed_bands, bass_start, bass_end);
-    features.mid_energy = compute_average_energy(smoothed_bands, mid_start, mid_end);
-    features.treble_energy = compute_average_energy(smoothed_bands, treble_start, treble_end);
+    const float bass_instant = compute_average_energy(bands, bass_start, bass_end);
+    const float mid_instant = compute_average_energy(bands, mid_start, mid_end);
+    const float treble_instant = compute_average_energy(bands, treble_start, treble_end);
+
+    const std::span<const float> smoothed_span(band_envelopes_.data(), band_envelopes_.size());
+    const float bass_smoothed = compute_average_energy(smoothed_span, bass_start, bass_end);
+    const float mid_smoothed = compute_average_energy(smoothed_span, mid_start, mid_end);
+    const float treble_smoothed = compute_average_energy(smoothed_span, treble_start, treble_end);
+
+    features.bass_energy_instantaneous = bass_instant;
+    features.mid_energy_instantaneous = mid_instant;
+    features.treble_energy_instantaneous = treble_instant;
+
+    features.bass_energy = bass_smoothed;
+    features.mid_energy = mid_smoothed;
+    features.treble_energy = treble_smoothed;
 
     double total_sum = 0.0;
-    for (float band : smoothed_bands) {
-        total_sum += std::max(band, 0.0f);
+    double smoothed_total_sum = 0.0;
+    for (std::size_t i = 0; i < band_count; ++i) {
+        total_sum += std::max(bands[i], 0.0f);
+        smoothed_total_sum += std::max(band_envelopes_[i], 0.0f);
     }
     if (band_count > 0) {
-        features.total_energy = static_cast<float>(total_sum / static_cast<double>(band_count));
+        const double divisor = static_cast<double>(band_count);
+        features.total_energy_instantaneous = static_cast<float>(total_sum / divisor);
+        features.total_energy = static_cast<float>(smoothed_total_sum / divisor);
     }
 
-    if (total_sum > static_cast<double>(config_.silence_threshold)) {
-        features.spectral_centroid = compute_spectral_centroid(smoothed_bands, total_sum);
+    if (smoothed_total_sum > static_cast<double>(config_.silence_threshold)) {
+        features.spectral_centroid = compute_spectral_centroid(smoothed_span, smoothed_total_sum);
     } else {
         features.spectral_centroid = 0.0f;
     }
@@ -90,7 +113,6 @@ void FeatureExtractor::ensure_band_capacity(std::size_t band_count) {
     band_count_ = band_count;
     weighting_curve_.assign(band_count_, 1.0f);
     band_envelopes_.assign(band_count_, 0.0f);
-    last_band_energies_.assign(band_count_, 0.0f);
 }
 
 std::pair<std::size_t, std::size_t> FeatureExtractor::resolve_band_indices(std::size_t band_count,
