@@ -2,6 +2,14 @@
 
 This document outlines the design for a significant upgrade to the `FeatureExtractor` service. The goal is to produce a comprehensive, professional-grade suite of audio features that will provide rich, nuanced data for driving sophisticated visuals, like the `PleasureAnimation`.
 
+## Current Status Recap (May 2025)
+
+- `FeatureExtractor` is presently stateless, with a `const process(...)` API. It only derives a handful of coarse metrics (three band averages, total energy, beat flag, spectral centroid) from log-spaced magnitudes that arrive already smoothed.
+- `DspEngine` computes the FFT, collapses magnitudes into log bands, applies attack/release smoothing, and calculates an aggregated spectral flux figure before handing control to the extractor. Phase information and per-bin magnitudes are discarded at this boundary.
+- The existing beat detection already keeps per-band flux deltas internally, but only the summed beat strength is exposed downstream.
+
+The upgrade described below therefore requires structural changes before the new features can be layered in. The plan explicitly calls out these prerequisites so the implementation can move forward without compromising the engine's real-time guarantees.
+
 This plan is designed with performance in mind, categorizing features into tiers based on their computational cost and artistic impact.
 
 ## 1. Guiding Principles
@@ -49,6 +57,13 @@ struct AudioFeatures {
 
 ## 3. Feature Implementation Strategy
 
+Before tackling the tiers below, complete the architectural adjustments in Phase 0 of `AUDIO_PLAN.md`:
+
+- Make `FeatureExtractor` stateful (drop the `const` qualifier on `process`, add persistent buffers for envelopes, onset history, tempo tracking, etc.).
+- Retain and pass per-bin FFT magnitudes (and phase where necessary) from `DspEngine` so higher-level perceptual and harmonic metrics have access to the raw spectrum.
+- Decide where energy smoothing lives to avoid double-filtering (either forward unsmoothed data to the extractor or centralize the smoothing logic in one place).
+- Expose the per-band spectral flux that `DspEngine` already calculates so multi-band onset logic can reuse it rather than re-deriving the same values.
+
 ### Tier 1: Perceptual Loudness & Energy
 
 1.  **A-Weighting Pre-Emphasis**:
@@ -60,14 +75,14 @@ struct AudioFeatures {
     -   **Benefit**: A master gain control for all visuals. An orchestral piece and a heavily compressed electronic track will both register at similar loudness levels, preventing visuals from blowing out or disappearing.
 
 3.  **Attack/Release Envelopes**:
-    -   **What**: For each energy band (`bass`, `mid`, `treble`), create an envelope follower with separate, configurable attack and release times.
-    -   **Benefit**: Allows for visuals that can rise instantly with a sound (`fast attack`) but fade out slowly and smoothly (`slow release`), mimicking audio compressors for a more natural feel.
+    -   **What**: For each energy band (`bass`, `mid`, `treble`), create an envelope follower with separate, configurable attack and release times. Only one module (either `DspEngine` or `FeatureExtractor`) should apply the smoothing to keep transient response crisp.
+    -   **Benefit**: Allows for visuals that can rise instantly with a sound (`fast attack`) but fade out slowly and smoothly (`slow release`), mimicking audio compressors for a more natural feel without overdamping.
 
 ### Tier 2: Rhythm You Can Lock To
 
 1.  **Multi-Band Onset Detection**:
-    -   **What**: Run the spectral flux onset detection algorithm independently on the bass, mid, and treble bands.
-    -   **Benefit**: The ability to distinguish between a kick drum, a snare, and a hi-hat, enabling far more detailed rhythmic animation.
+    -   **What**: Run the spectral flux onset detection algorithm independently on the bass, mid, and treble bands, reusing the per-band flux already computed during the DSP step whenever possible.
+    -   **Benefit**: The ability to distinguish between a kick drum, a snare, and a hi-hat, enabling far more detailed rhythmic animation without redundant CPU work.
 
 2.  **Tempo (BPM) and Phase Tracking**:
     -   **What**: Use autocorrelation on the onset detection curve to find the most likely tempo (BPM). Maintain a "phase accumulator" that resets on each beat and increments from 0 to 1 until the next.
