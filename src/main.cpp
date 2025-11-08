@@ -120,12 +120,19 @@ int main(int argc, char** argv) {
 
     when::events::EventBus event_bus;
 
+    when::FeatureExtractor::Config feature_config{};
+    feature_config.smoothing_attack = config.dsp.smoothing_attack;
+    feature_config.smoothing_release = config.dsp.smoothing_release;
+    feature_config.enable_spectral_flatness = config.dsp.enable_spectral_flatness;
+    feature_config.enable_chroma = config.dsp.enable_chroma;
+
     when::DspEngine dsp(event_bus,
                        sample_rate,
                        channels,
                        config.dsp.fft_size,
                        config.dsp.hop_size,
-                       config.dsp.bands);
+                       config.dsp.bands,
+                       feature_config);
 
     when::PluginManager plugin_manager;
     when::register_builtin_plugins(plugin_manager);

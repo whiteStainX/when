@@ -59,20 +59,54 @@ Your animation does not get raw FFT data. Instead, it receives the clean, easy-t
 ```cpp
 // From: src/audio/audio_features.h
 struct AudioFeatures {
-    // Energy Bands
-    float bass_energy;      // Energy in the low-frequency range
-    float mid_energy;       // Energy in the mid-frequency range
-    float treble_energy;    // Energy in the high-frequency range
-    float total_energy;     // Overall energy across all bands
+    // Smoothed energy bands
+    float bass_energy;      // Low frequencies after perceptual weighting + smoothing
+    float mid_energy;       // Mid frequencies after perceptual weighting + smoothing
+    float treble_energy;    // High frequencies after perceptual weighting + smoothing
+    float total_energy;     // Aggregate energy across all bands
 
-    // Rhythmic Features
-    bool  beat_detected;    // True for a single frame when a beat occurs
-    float beat_strength;    // The confidence/strength of the detected beat
+    // Explicit band envelopes (attack/release controlled in when.toml)
+    float bass_envelope;
+    float mid_envelope;
+    float treble_envelope;
 
-    // Spectral Features
-    float spectral_centroid; // The "brightness" of the sound (0.0=dark, 1.0=bright)
+    // Instantaneous (pre-smoothed) energies for fast-reacting visuals
+    float bass_energy_instantaneous;
+    float mid_energy_instantaneous;
+    float treble_energy_instantaneous;
+    float total_energy_instantaneous;
+
+    // Rhythmic tracking
+    bool  beat_detected;
+    float beat_strength;
+    bool  bass_beat;
+    bool  mid_beat;
+    bool  treble_beat;
+    float bpm;
+    float beat_phase;
+    float bar_phase;
+    bool  downbeat;
+
+    // Spectral shape
+    float spectral_centroid;
+    float spectral_flatness;    // Higher = noisier/whiter, lower = tonal
+
+    // Harmonic content (optional)
+    std::array<float, 12> chroma; // Normalised pitch-class intensities C..B
+    bool chroma_available;        // False when chroma analysis is disabled/offline
+
+    // Raw DSP context
+    std::span<const float> band_flux; // Per-band onset deltas
 };
 ```
+
+### Choosing the right field for your animation
+
+- Use the **smoothed energies or envelopes** when you want graceful, musical motion. Tweak the `dsp.smoothing_attack` and `dsp.smoothing_release` options in `when.toml` to globally adjust how responsive these values feel.
+- Use the **instantaneous energies** for sharp, percussive reactions—e.g., screen shakes or particle bursts tied to fast transients.
+- The **beat flags** (`beat_detected`, `bass_beat`, etc.) let you trigger one-off events. Combine them with `beat_phase`/`bar_phase` when you need metronomic placement.
+- **Spectral flatness** shines when differentiating noise-like textures (hi-hats, crowd noise) from tonal content (pads, vocals). Higher values mean "noisier." Consider mapping it to texture, particle variance, or color saturation.
+- The **chroma vector** gives you musical pitch information. Only consume it when `chroma_available` is true; this respects the new configuration switches so you don't accidentally rely on disabled data.
 
 ## 3. Implementing Your Animation
 
@@ -149,6 +183,18 @@ Make your animation customizable by adding parameters to `when.toml` and the C++
 2.  **Add to `config_loader.cpp` (or similar):** Update the config loading logic to parse your new parameter from the `toml::table`.
 
 3.  **Use in Your Code:** In your animation's `init` or `load_parameters_from_config` method, read the value from the config object.
+
+### Audio analysis controls you can rely on
+
+The audio subsystem now exposes a few knobs that directly influence the richness of the `AudioFeatures` you receive:
+
+| Option | Location | What it does |
+| --- | --- | --- |
+| `dsp.smoothing_attack` / `dsp.smoothing_release` | `[dsp]` table | Controls the global attack/release time of the band envelopes. Lower values follow the waveform more tightly; higher values produce silkier motion. |
+| `dsp.enable_spectral_flatness` | `[dsp]` table | Enables the tonal-vs-noise analyzer. Disable it to save CPU if your animation does not need `spectral_flatness`. |
+| `dsp.enable_chroma` | `[dsp]` table | Enables 12-bin chroma pitch tracking. Leave it off for lightweight setups or when no animation consumes harmonic data. |
+
+Your animation should read the `AudioFeatures` defensively: always check `chroma_available` before using the chroma array, and expect `spectral_flatness` to be zero when the analysis is disabled. This keeps visuals robust across different installations.
 
 ---
 
