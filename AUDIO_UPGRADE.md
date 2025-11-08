@@ -1,104 +1,105 @@
 # Audio Engine Upgrade Plan
 
-This document outlines the design for a significant upgrade to the `FeatureExtractor` service. The goal is to produce a comprehensive, professional-grade suite of audio features that will provide rich, nuanced data for driving sophisticated visuals, starting with the `PleasureAnimation`.
+This document outlines the design for a significant upgrade to the `FeatureExtractor` service. The goal is to produce a comprehensive, professional-grade suite of audio features that will provide rich, nuanced data for driving sophisticated visuals, like the `PleasureAnimation`.
 
 This plan is designed with performance in mind, categorizing features into tiers based on their computational cost and artistic impact.
 
-## 1. The Expanded `AudioFeatures` API Contract
+## 1. Guiding Principles
 
-The `AudioFeatures` struct will be expanded to become a much richer data contract. It will be organized by feature type and will include both raw, frame-by-frame values and smoothed, "envelope" versions for more stable animations.
+- **Perceptual Accuracy**: Features should reflect what a human *hears*, not just raw signal power. This involves perceptual weighting (A-weighting), loudness normalization (LUFS), and psychoacoustically-aware algorithms.
+- **Musical Intelligence**: The engine should understand not just *that* a sound occurred, but its musical role—is it a beat, a melody, a texture? This means moving from onset detection to tempo tracking, beat grids, and harmonic analysis.
+- **Performance by Design**: The system must operate in real-time. This requires efficient algorithms, optional features, performance monitoring, and a disciplined approach to memory and processing. Expensive features should be optional or run at a lower rate.
+
+## 2. The Expanded `AudioFeatures` API Contract
+
+The `AudioFeatures` struct will be expanded to become a much richer data contract, organized by musical characteristic.
 
 ```cpp
 struct AudioFeatures {
-    // --- Tier 1: Core Energy & Rhythm (Low CPU Cost) ---
+    // --- Tier 1: Core Energy & Loudness ---
+    float short_term_loudness;  // Perceptually-weighted loudness (LUFS-like)
+    float bass_energy;          // A-weighted bass energy
+    float mid_energy;           // A-weighted mid energy
+    float treble_energy;        // A-weighted treble energy
+    float bass_envelope;        // Smoothed bass envelope (fast attack, slow release)
+    float mid_envelope;         // Smoothed mid envelope
+    float treble_envelope;      // Smoothed treble envelope
 
-    // Raw, frame-by-frame energy values
-    float bass_energy;
-    float mid_energy;
-    float treble_energy;
-    float total_energy;
+    // --- Tier 2: Rhythm & Structure ---
+    bool  beat_detected;        // A significant beat was detected this frame
+    float beat_strength;        // Strength of the current beat
+    float bpm;                  // Estimated tempo in beats per minute
+    float beat_phase;           // Phase accumulator (0-1) locked to the beat
+    float bar_phase;            // Phase accumulator (0-1) for a 4/4 measure
+    bool  downbeat;             // True if the current beat is the first in a measure
 
-    // Smoothed, slow-moving energy envelopes
-    float bass_envelope;
-    float mid_envelope;
-    float treble_envelope;
-    float total_envelope;
+    // --- Tier 3: Timbre & Harmony (Moderate CPU) ---
+    float spectral_centroid;    // "Brightness" of the sound
+    float spectral_flatness;    // Tonal vs. noisy characteristic
+    float spectral_rolloff;     // "Brightness tilt" of the spectrum
+    // std::vector<float> chroma; // 12-bin vector representing musical pitch classes (C, C#, D...)
+    // std::vector<float> mfcc;   // 4-8 coefficients for a compact timbre signature
 
-    // Core beat detection
-    bool  beat_detected;    // True for one frame on beat onset
-    float beat_strength;    // Strength of the current beat
-
-    // --- Tier 2: Advanced Rhythm & Spectral (Moderate CPU Cost) ---
-
-    // Multi-band beat detection
-    bool  bass_beat;        // Beat detected primarily in the bass band (kick drum)
-    bool  mid_beat;         // Beat detected in the mid band (snare)
-    bool  treble_beat;      // Beat detected in the treble band (hi-hat)
-
-    // Spectral characteristics
-    float spectral_centroid;        // "Brightness" of the sound
-    float spectral_centroid_norm;   // Centroid normalized by total energy
-    float spectral_flux;            // "Novelty", how much the spectrum is changing
-
-    // --- Tier 3: Advanced Tonal Analysis (High CPU Cost, Optional) ---
-
-    // Pitch and harmony detection
-    bool  pitch_detected;           // Is there a clear, discernible musical note?
-    float pitch_frequency;          // The fundamental frequency (in Hz) of the note
-    // Example: Could be expanded to include note name (e.g., "C#4")
+    // --- Tier 4: Source Separation (High CPU, Optional) ---
+    // Separate features for the percussive and harmonic elements of the sound
+    // float percussive_energy;
+    // float harmonic_energy;
 };
 ```
 
-## 2. Feature Implementation Strategy
+## 3. Feature Implementation Strategy
 
-The features will be implemented within the `FeatureExtractor` class, with a focus on efficiency.
+### Tier 1: Perceptual Loudness & Energy
 
-### Tier 1: Core Features (Highest Priority)
+1.  **A-Weighting Pre-Emphasis**:
+    -   **What**: Before calculating energy, apply an A-weighting filter curve to the FFT bins. This boosts frequencies where the human ear is most sensitive and attenuates those where it is not.
+    -   **Benefit**: `bass_energy` will now represent perceived "punch" and `treble_energy` will represent perceived "sizzle," making them map more intuitively to visuals.
 
-This tier refines what we already have and is essential for the `PleasureAnimation`.
+2.  **Short-Term Loudness (LUFS-like)**:
+    -   **What**: Implement a real-time approximation of the BS.1770 loudness standard. This involves a specific pre-filtering (K-weighting) and averaging over a ~400ms window.
+    -   **Benefit**: A master gain control for all visuals. An orchestral piece and a heavily compressed electronic track will both register at similar loudness levels, preventing visuals from blowing out or disappearing.
 
-1.  **Energy Bands (`bass_energy`, etc.)**:
-    -   **Implementation**: The current implementation is already efficient. We will continue to use it.
+3.  **Attack/Release Envelopes**:
+    -   **What**: For each energy band (`bass`, `mid`, `treble`), create an envelope follower with separate, configurable attack and release times.
+    -   **Benefit**: Allows for visuals that can rise instantly with a sound (`fast attack`) but fade out slowly and smoothly (`slow release`), mimicking audio compressors for a more natural feel.
 
-2.  **Energy Envelopes (`bass_envelope`, etc.)**:
-    -   **Implementation**: For each raw energy value, we will add a corresponding envelope value. This will be calculated using a simple exponential smoothing filter (the same technique already used for `global_magnitude_`).
-    -   **Performance**: Very low cost, just a few multiplications and additions per feature.
-    -   **Benefit**: Provides a "slow" version of each energy metric for free, allowing animations to react to both immediate and averaged energy without implementing their own smoothing.
+### Tier 2: Rhythm You Can Lock To
 
-3.  **Core Beat Detection**:
-    -   **Implementation**: The current spectral flux-based algorithm is a good baseline. We will keep it as the primary `beat_strength` source.
+1.  **Multi-Band Onset Detection**:
+    -   **What**: Run the spectral flux onset detection algorithm independently on the bass, mid, and treble bands.
+    -   **Benefit**: The ability to distinguish between a kick drum, a snare, and a hi-hat, enabling far more detailed rhythmic animation.
 
-### Tier 2: Advanced Features (Next Priority)
+2.  **Tempo (BPM) and Phase Tracking**:
+    -   **What**: Use autocorrelation on the onset detection curve to find the most likely tempo (BPM). Maintain a "phase accumulator" that resets on each beat and increments from 0 to 1 until the next.
+    -   **Benefit**: This is a massive leap. Animations can now be driven by a stable clock locked to the music's tempo. This enables perfectly synchronized periodic motions, pulses, and strobes.
 
-These features add significant artistic potential.
+3.  **Beat Grid & Downbeat Detection**:
+    -   **What**: Using the tracked tempo, infer a 4/4 measure. Track the current beat within the bar (1, 2, 3, 4) and provide a `bar_phase` (0 to 1 over the whole measure). Mark the first beat as the `downbeat`.
+    -   **Benefit**: Allows for "phrasing" in visuals. An animation can have a major accent on the downbeat and smaller accents on the other beats, making it feel structurally aware of the music.
 
-1.  **Multi-Band Beat Detection (`bass_beat`, etc.)**:
-    -   **Implementation**: The beat detection algorithm (calculating spectral flux) will be run independently on the FFT data for the bass, mid, and treble frequency ranges. This will produce three separate flux values, and thus three separate beat triggers.
-    -   **Performance**: Moderate cost. It triples the beat detection workload, but this is still a small part of the overall DSP chain compared to the FFT itself.
-    -   **Benefit**: This is a huge upgrade. It allows visuals to react differently to kick drums, snares, and hi-hats, which is key to creating detailed, rhythmically accurate animations.
+### Tier 3: Timbre & Harmony (The Efficient Path)
 
-2.  **Spectral Flux**:
-    -   **Implementation**: This is the raw value of the change in the spectrum from the previous frame. The current beat detector already calculates this, so we just need to expose a normalized version of it.
-    -   **Performance**: Almost free, as the value is already computed.
-    -   **Benefit**: A great trigger for "novelty" effects, such as when a new instrument enters the track.
+1.  **Chroma Features**:
+    -   **What**: Implement a Chromagram. This involves mapping FFT bins to 12 "pitch classes" (C, C#, D, etc.). This is far cheaper than direct pitch detection.
+    -   **Benefit**: Provides the harmonic "flavor" of the music. You can use this to tint the entire scene's color palette based on the current key or chord, creating powerful mood changes.
 
-3.  **Normalized Spectral Centroid**:
-    -   **Implementation**: The current centroid calculation is good. The normalized version is simply `spectral_centroid / total_energy`.
-    -   **Performance**: Very low cost.
-    -   **Benefit**: A centroid value that is less affected by overall volume, making it a more stable parameter for controlling things like color.
+2.  **Spectral Flatness & Zero-Crossing Rate (ZCR)**:
+    -   **What**: Flatness measures how noisy vs. tonal a sound is. ZCR is a very cheap proxy for "brightness" calculated on the raw audio samples.
+    -   **Benefit**: Excellent for controlling texture. A noisy sound (high flatness) can map to more "grain" or particle effects in the `PleasureAnimation`, while a tonal sound can map to smoother lines.
 
-### Tier 3: Tonal Features (Optional / Future Goal)
+### Tier 4: Source Separation (Advanced)
 
-This is the most computationally expensive and complex tier.
+1.  **Harmonic-Percussive Source Separation (HPSS)**:
+    -   **What**: Use median filtering across the time and frequency axes of the spectrogram to separate it into two layers: one containing horizontal features (harmonics, pads, vocals) and one with vertical features (transients, drums).
+    -   **Benefit**: The ultimate feature for the `PleasureAnimation`. The harmonic layer can drive the slow, undulating shapes of the lines, while the percussive layer can trigger sharp, crackling bursts of noise or light on top of them, perfectly disentangling the "flow" from the "crackle."
 
-1.  **Pitch Detection**:
-    -   **Implementation**: This requires a dedicated pitch detection algorithm (e.g., YIN, AMDF, or a machine learning model). This is a significant undertaking. It would involve analyzing the waveform to find its fundamental frequency.
-    -   **Performance**: **High cost**. A robust pitch detection algorithm can be as expensive as the FFT itself. This should be an optional feature that can be disabled in the configuration.
-    -   **Benefit**: The "holy grail" for synesthetic visuals. Allows for direct mapping of musical notes to colors or shapes, creating visuals that are harmonically in sync with the audio.
+## 4. Real-time Performance & System Discipline
 
-## 3. Configuration and Performance
+This section, inspired by your feedback, will be added to the main `DESIGN.md` to enforce best practices.
 
--   **Configurability**: The `FeatureExtractor`'s configuration will be expanded. Each feature, especially the expensive ones (like Pitch Detection), will be individually **enabled or disabled** via the `when.toml` file.
--   **Performance First**: The implementation will prioritize performance. All calculations will use `float` where possible, and algorithms will be chosen for their efficiency on a CPU. We will avoid any memory allocations (like creating new vectors) within the real-time processing loop.
-
-This plan provides a clear roadmap for evolving the audio engine into a truly professional-grade service, enabling a new level of sophistication for the `PleasureAnimation` and all future visualizers.
+-   **FFT Settings**: Standardize on 48kHz sample rate, FFT size of 2048, and a hop size of 512 (4x overlap). This provides a good balance of time and frequency resolution.
+-   **Performance Tiers**: All features from Tier 2 and above will be individually optional in `when.toml`. The `FeatureExtractor` will only compute what is explicitly enabled.
+-   **Feature Decimation**: Expensive features (Chroma, HPSS) can be configured to run at half or quarter the visual frame rate, with their results being interpolated (held or linearly faded) for the frames in between.
+-   **Real-time Safety**: No memory allocations (no `new`, `malloc`, `std::vector::push_back`) are allowed within the real-time audio callback or the main DSP processing loop. All buffers must be pre-allocated.
+-   **Input Plumbing**: The architecture should support capturing from two devices simultaneously (e.g., microphone and system loopback) and provide a mechanism (e.g., envelope subtraction) to prevent "double hits" from speaker bleed.
+-   **Input Conditioning**: The microphone input path should have optional high-pass and 50/60Hz notch filters to remove DC offset and electrical hum.
