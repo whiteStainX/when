@@ -23,6 +23,13 @@ struct AudioFeatures {
     // Rhythmic Features
     bool beat_detected = false; // True for a single frame when a beat occurs
     float beat_strength = 0.0f; // Confidence/strength of the detected beat
+    bool bass_beat = false;     // True when a bass-band onset is detected
+    bool mid_beat = false;      // True when a mid-band onset is detected
+    bool treble_beat = false;   // True when a treble-band onset is detected
+    float bpm = 0.0f;           // Estimated tempo in beats per minute
+    float beat_phase = 0.0f;    // Normalized phase of the current beat (0-1)
+    float bar_phase = 0.0f;     // Normalized phase within the current bar (0-1)
+    bool downbeat = false;      // True on frames aligned with the bar downbeat
 
     // Spectral Features
     float spectral_centroid = 0.0f; // Represents the "brightness" of the sound

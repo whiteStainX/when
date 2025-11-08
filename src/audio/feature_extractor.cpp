@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 
 #include "audio/feature_input_frame.h"
 
@@ -26,13 +27,22 @@ void FeatureExtractor::reset() {
     if (!weighted_bins_.empty()) {
         std::fill(weighted_bins_.begin(), weighted_bins_.end(), 0.0f);
     }
+    if (!band_flux_baseline_.empty()) {
+        std::fill(band_flux_baseline_.begin(), band_flux_baseline_.end(), 0.0f);
+    }
     if (onset_history_.empty()) {
-        onset_history_.resize(kDefaultOnsetHistoryLength, 0.0f);
+        resize_onset_history(kDefaultOnsetHistoryLength);
     } else {
         std::fill(onset_history_.begin(), onset_history_.end(), 0.0f);
+        if (onset_history_linear_.size() != onset_history_.size()) {
+            onset_history_linear_.assign(onset_history_.size(), 0.0f);
+        } else {
+            std::fill(onset_history_linear_.begin(), onset_history_linear_.end(), 0.0f);
+        }
     }
     onset_history_write_pos_ = 0;
     tempo_state_ = {};
+    beat_counter_in_bar_ = 0;
     bass_envelope_ = 0.0f;
     mid_envelope_ = 0.0f;
     treble_envelope_ = 0.0f;
@@ -177,6 +187,58 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
         features.spectral_centroid = 0.0f;
     }
 
+    float onset_strength = 0.0f;
+    bool aggregated_onset = false;
+    const std::span<const float> band_flux = input_frame.band_flux;
+    if (!band_flux.empty() && band_flux.size() == band_count_) {
+        if (band_flux_baseline_.size() != band_count_) {
+            band_flux_baseline_.assign(band_count_, 0.0f);
+        }
+
+        const float flux_alpha = std::clamp(config_.band_flux_smoothing, 0.0f, 1.0f);
+        double aggregated_excess = 0.0;
+        for (std::size_t i = 0; i < band_count_; ++i) {
+            const float flux_value = std::max(band_flux[i], 0.0f);
+            float& baseline = band_flux_baseline_[i];
+            baseline += (flux_value - baseline) * flux_alpha;
+            const float excess = std::max(0.0f, flux_value - baseline);
+            aggregated_excess += excess;
+        }
+
+        onset_strength = (band_count_ > 0)
+                             ? static_cast<float>(aggregated_excess / static_cast<double>(band_count_))
+                             : 0.0f;
+
+        const std::span<const float> baseline_span(band_flux_baseline_.data(), band_flux_baseline_.size());
+        const auto detect_band = [&](std::size_t start, std::size_t end) {
+            if (start >= end) {
+                return false;
+            }
+            const float band_value = compute_average_energy(band_flux, start, end);
+            const float band_baseline = compute_average_energy(baseline_span, start, end);
+            const float threshold =
+                std::max(config_.band_onset_min_flux, band_baseline * config_.band_onset_sensitivity);
+            return band_value > threshold;
+        };
+
+        features.bass_beat = detect_band(bass_start, bass_end);
+        features.mid_beat = detect_band(mid_start, mid_end);
+        features.treble_beat = detect_band(treble_start, treble_end);
+
+        aggregated_onset = onset_strength > config_.global_onset_threshold;
+    } else {
+        features.bass_beat = false;
+        features.mid_beat = false;
+        features.treble_beat = false;
+    }
+
+    features.beat_detected = features.beat_detected || aggregated_onset || features.bass_beat || features.mid_beat ||
+                             features.treble_beat;
+
+    const bool downbeat =
+        update_tempo_tracking(onset_strength, input_frame.frame_period, features.beat_detected, features);
+    features.downbeat = downbeat;
+
     return features;
 }
 
@@ -184,6 +246,7 @@ void FeatureExtractor::ensure_band_capacity(std::size_t band_count) {
     band_count_ = band_count;
     band_envelopes_.assign(band_count_, 0.0f);
     weighted_band_buffer_.assign(band_count_, 0.0f);
+    band_flux_baseline_.assign(band_count_, 0.0f);
 }
 
 void FeatureExtractor::update_weighting_curve(std::size_t fft_bin_count,
@@ -220,6 +283,185 @@ float FeatureExtractor::apply_envelope(float target, float& state) const {
     const float alpha = (target > state) ? config_.smoothing_attack : config_.smoothing_release;
     state += (target - state) * alpha;
     return state;
+}
+
+void FeatureExtractor::resize_onset_history(std::size_t desired_length) {
+    if (desired_length == 0) {
+        desired_length = kMinOnsetHistoryLength;
+    }
+    desired_length = std::clamp(desired_length, kMinOnsetHistoryLength, kMaxOnsetHistoryLength);
+    if (onset_history_.size() == desired_length) {
+        if (onset_history_linear_.size() != desired_length) {
+            onset_history_linear_.assign(desired_length, 0.0f);
+        }
+        return;
+    }
+
+    onset_history_.assign(desired_length, 0.0f);
+    onset_history_linear_.assign(desired_length, 0.0f);
+    onset_history_write_pos_ = 0;
+}
+
+bool FeatureExtractor::update_tempo_tracking(float onset_strength,
+                                             float frame_period,
+                                             bool beat_observed,
+                                             AudioFeatures& features) {
+    const std::size_t beats_per_bar = std::max<std::size_t>(1, config_.beats_per_bar);
+    const int beats_per_bar_int = static_cast<int>(beats_per_bar);
+    bool downbeat = false;
+
+    if (frame_period <= 0.0f) {
+        tempo_state_.bar_phase = (static_cast<float>(beat_counter_in_bar_) + tempo_state_.beat_phase) /
+                                 static_cast<float>(beats_per_bar_int);
+        tempo_state_.bar_phase = std::clamp(tempo_state_.bar_phase, 0.0f, 1.0f);
+        features.bpm = tempo_state_.bpm;
+        features.beat_phase = tempo_state_.beat_phase;
+        features.bar_phase = tempo_state_.bar_phase;
+        features.downbeat = false;
+        return false;
+    }
+
+    const double frame_period_d = static_cast<double>(frame_period);
+    const double window_seconds = std::max(static_cast<double>(config_.tempo_history_seconds), frame_period_d);
+    double frames_needed = window_seconds / frame_period_d;
+    if (frames_needed < static_cast<double>(kMinOnsetHistoryLength)) {
+        frames_needed = static_cast<double>(kMinOnsetHistoryLength);
+    }
+    if (frames_needed > static_cast<double>(kMaxOnsetHistoryLength)) {
+        frames_needed = static_cast<double>(kMaxOnsetHistoryLength);
+    }
+
+    const std::size_t desired_length = std::max<std::size_t>(kMinOnsetHistoryLength,
+                                                             static_cast<std::size_t>(frames_needed));
+    if (onset_history_.empty() || onset_history_.size() != desired_length) {
+        resize_onset_history(desired_length);
+    }
+
+    if (onset_history_.empty()) {
+        features.bpm = tempo_state_.bpm;
+        features.beat_phase = tempo_state_.beat_phase;
+        features.bar_phase = tempo_state_.bar_phase;
+        features.downbeat = false;
+        return false;
+    }
+
+    onset_history_[onset_history_write_pos_] = std::max(onset_strength, 0.0f);
+    onset_history_write_pos_ = (onset_history_write_pos_ + 1) % onset_history_.size();
+
+    const std::size_t history_size = onset_history_.size();
+    if (onset_history_linear_.size() != history_size) {
+        onset_history_linear_.assign(history_size, 0.0f);
+    }
+    for (std::size_t i = 0; i < history_size; ++i) {
+        const std::size_t index = (onset_history_write_pos_ + i) % history_size;
+        onset_history_linear_[i] = onset_history_[index];
+    }
+
+    float tempo_candidate = 0.0f;
+    float best_score = 0.0f;
+
+    if (history_size >= 8) {
+        const float min_bpm = std::min(config_.tempo_min_bpm, config_.tempo_max_bpm);
+        const float max_bpm = std::max(config_.tempo_min_bpm, config_.tempo_max_bpm);
+        if (max_bpm > 0.0f && frame_period_d > 0.0) {
+            double min_period = 60.0 / static_cast<double>(max_bpm);
+            double max_period = 60.0 / static_cast<double>(std::max(min_bpm, 1.0f));
+            if (min_period > max_period) {
+                std::swap(min_period, max_period);
+            }
+
+            std::size_t min_lag = static_cast<std::size_t>(std::floor(min_period / frame_period_d));
+            std::size_t max_lag = static_cast<std::size_t>(std::ceil(max_period / frame_period_d));
+
+            min_lag = std::max<std::size_t>(1, min_lag);
+            max_lag = std::max<std::size_t>(min_lag, max_lag);
+            if (max_lag >= history_size) {
+                max_lag = history_size - 1;
+            }
+
+            if (max_lag > min_lag && history_size > 1) {
+                const float mean = std::accumulate(onset_history_linear_.begin(), onset_history_linear_.end(), 0.0f) /
+                                   static_cast<float>(history_size);
+
+                for (std::size_t lag = min_lag; lag <= max_lag; ++lag) {
+                    float score = 0.0f;
+                    for (std::size_t i = lag; i < history_size; ++i) {
+                        const float a = onset_history_linear_[i] - mean;
+                        const float b = onset_history_linear_[i - lag] - mean;
+                        score += a * b;
+                    }
+                    const std::size_t sample_count = history_size - lag;
+                    if (sample_count > 0) {
+                        score /= static_cast<float>(sample_count);
+                    }
+
+                    if (score > best_score) {
+                        best_score = score;
+                        tempo_candidate = (lag > 0)
+                                              ? static_cast<float>(60.0 / (static_cast<double>(lag) * frame_period_d))
+                                              : 0.0f;
+                    }
+                }
+            }
+        }
+    }
+
+    if (tempo_candidate > 0.0f && best_score > config_.tempo_confidence_threshold) {
+        const float smoothing = std::clamp(config_.tempo_smoothing, 0.0f, 1.0f);
+        if (tempo_state_.bpm <= 0.0f) {
+            tempo_state_.bpm = tempo_candidate;
+        } else {
+            tempo_state_.bpm += (tempo_candidate - tempo_state_.bpm) * smoothing;
+        }
+        tempo_state_.confidence = best_score;
+    } else {
+        tempo_state_.confidence *= 0.95f;
+        if (tempo_state_.confidence < config_.tempo_confidence_threshold * 0.5f) {
+            tempo_state_.bpm *= 0.98f;
+            if (tempo_state_.bpm < 1e-3f) {
+                tempo_state_.bpm = 0.0f;
+            }
+        }
+    }
+
+    if (tempo_state_.bpm > 0.0f) {
+        const float beats_advanced = (tempo_state_.bpm / 60.0f) * frame_period;
+        float phase_accumulator = tempo_state_.beat_phase + beats_advanced;
+        if (phase_accumulator >= 1.0f) {
+            const float wrapped = std::floor(phase_accumulator);
+            const int wraps = static_cast<int>(wrapped);
+            phase_accumulator -= wrapped;
+            for (int i = 0; i < wraps; ++i) {
+                beat_counter_in_bar_ = (beat_counter_in_bar_ + 1) % beats_per_bar_int;
+                if (beat_counter_in_bar_ == 0) {
+                    downbeat = true;
+                }
+            }
+        }
+
+        tempo_state_.beat_phase = std::clamp(phase_accumulator, 0.0f, 1.0f);
+
+        if (beat_observed) {
+            const float realign = std::clamp(config_.beat_phase_realign, 0.0f, 1.0f);
+            tempo_state_.beat_phase -= tempo_state_.beat_phase * realign;
+            tempo_state_.beat_phase = std::clamp(tempo_state_.beat_phase, 0.0f, 1.0f);
+        }
+
+        const float per_bar = static_cast<float>(beats_per_bar_int);
+        tempo_state_.bar_phase =
+            (static_cast<float>(beat_counter_in_bar_) + tempo_state_.beat_phase) / std::max(per_bar, 1.0f);
+        tempo_state_.bar_phase = std::clamp(tempo_state_.bar_phase, 0.0f, 1.0f);
+    } else {
+        tempo_state_.beat_phase = 0.0f;
+        tempo_state_.bar_phase = 0.0f;
+        beat_counter_in_bar_ = 0;
+    }
+
+    features.bpm = tempo_state_.bpm;
+    features.beat_phase = tempo_state_.beat_phase;
+    features.bar_phase = tempo_state_.bar_phase;
+    features.downbeat = downbeat;
+    return downbeat;
 }
 
 std::pair<std::size_t, std::size_t> FeatureExtractor::resolve_band_indices(std::size_t band_count,
