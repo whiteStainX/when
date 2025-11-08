@@ -31,6 +31,7 @@ set(WHEN_SOURCES
   src/animations/pleasure_animation.cpp
   src/animations/animation_manager.cpp
   src/animations/glyph_utils.cpp
+  src/animations/band/sprite_types.cpp
   external/kissfft/kiss_fft.c
 )
 
@@ -60,3 +61,27 @@ add_executable(feature_extractor_sanity
 target_include_directories(feature_extractor_sanity PRIVATE
   src
 )
+
+add_executable(sprite_player_harness
+  extra/sprite_player_harness.cpp
+  src/animations/band/sprite_types.cpp
+)
+
+target_include_directories(sprite_player_harness PRIVATE
+  src
+)
+
+target_link_libraries(sprite_player_harness PRIVATE PkgConfig::NOTCURSES)
+
+enable_testing()
+
+add_executable(band_sprite_loader_test
+  tests/band_sprite_loader_test.cpp
+  src/animations/band/sprite_types.cpp
+)
+
+target_include_directories(band_sprite_loader_test PRIVATE
+  src
+)
+
+add_test(NAME band_sprite_loader_test COMMAND band_sprite_loader_test)
