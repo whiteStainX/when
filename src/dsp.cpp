@@ -1,6 +1,7 @@
 #include "dsp.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
@@ -110,6 +111,16 @@ void DspEngine::compute_band_ranges() {
         return;
     }
 
+    if (prev_magnitudes_.size() != bands) {
+        prev_magnitudes_.assign(bands, 0.0f);
+    }
+    if (instantaneous_band_energies_.size() != bands) {
+        instantaneous_band_energies_.assign(bands, 0.0f);
+    }
+    if (band_flux_.size() != bands) {
+        band_flux_.assign(bands, 0.0f);
+    }
+
     const float nyquist = std::max(static_cast<float>(sample_rate_) * 0.5f, kMinDisplayFrequency * 1.1f);
     const float bin_width = static_cast<float>(sample_rate_) / static_cast<float>(fft_size_);
     const float min_freq = std::max(kMinDisplayFrequency, bin_width);
@@ -138,6 +149,9 @@ void DspEngine::process_frame() {
     }
 
     const float norm = 1.0f / static_cast<float>(fft_size_);
+
+    assert(band_bin_ranges_.size() == instantaneous_band_energies_.size());
+    assert(band_bin_ranges_.size() == band_flux_.size());
 
     for (std::size_t i = 0; i < fft_size_; ++i) {
         const float windowed = frame_buffer_[i] * window_[i];

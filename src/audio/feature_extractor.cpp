@@ -48,6 +48,7 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
     }
 
     AudioFeatures features{};
+    features.band_flux = input_frame.band_flux;
     features.beat_strength = input_frame.beat_strength;
     features.beat_detected = input_frame.beat_strength >= config_.beat_detection_threshold;
 
