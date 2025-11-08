@@ -22,6 +22,7 @@ int main() {
     input.fft_magnitudes = fft_magnitudes;
     input.fft_phases = fft_phases;
     input.band_flux = band_flux;
+    input.sample_rate = 48000.0f;
     input.beat_strength = 0.5f;
 
     const auto features = extractor.process(input);

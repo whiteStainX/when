@@ -207,6 +207,8 @@ void DspEngine::process_frame() {
         std::span<const float>(instantaneous_band_energies_);
     feature_input_frame_.smoothed_band_energies = std::span<const float>();
     feature_input_frame_.band_flux = std::span<const float>(band_flux_);
+    feature_input_frame_.band_bin_ranges = std::span<const std::pair<std::size_t, std::size_t>>(band_bin_ranges_);
+    feature_input_frame_.sample_rate = static_cast<float>(sample_rate_);
     feature_input_frame_.beat_strength = beat_strength_;
 
     latest_features_ = feature_extractor_.process(feature_input_frame_);

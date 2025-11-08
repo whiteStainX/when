@@ -40,6 +40,8 @@ public:
 
 private:
     void ensure_band_capacity(std::size_t band_count);
+    void update_weighting_curve(std::size_t fft_bin_count, float sample_rate, std::size_t fft_size);
+    float apply_envelope(float target, float& state) const;
 
     static std::pair<std::size_t, std::size_t> resolve_band_indices(std::size_t band_count,
                                                                     const BandRange& range);
@@ -48,6 +50,7 @@ private:
                                         std::size_t end);
     float compute_spectral_centroid(std::span<const float> bands,
                                     double total_energy_sum) const;
+    static float compute_a_weighting_coefficient(double frequency_hz);
 
     struct TempoTrackerState {
         float bpm = 0.0f;
@@ -60,6 +63,8 @@ private:
     Config config_;
     std::size_t band_count_ = 0;
     std::vector<float> weighting_curve_;
+    std::vector<float> weighted_bins_;
+    std::vector<float> weighted_band_buffer_;
     std::vector<float> band_envelopes_;
     std::vector<float> onset_history_;
     std::size_t onset_history_write_pos_ = 0;
@@ -67,6 +72,9 @@ private:
     float bass_envelope_ = 0.0f;
     float mid_envelope_ = 0.0f;
     float treble_envelope_ = 0.0f;
+    float total_envelope_ = 0.0f;
+    float weighting_sample_rate_ = 0.0f;
+    std::size_t weighting_fft_size_ = 0;
 };
 
 } // namespace when

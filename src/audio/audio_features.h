@@ -10,6 +10,9 @@ struct AudioFeatures {
     float mid_energy = 0.0f;    // Smoothed energy in the mid-frequency range
     float treble_energy = 0.0f; // Smoothed energy in the high-frequency range
     float total_energy = 0.0f;  // Smoothed overall energy across all bands
+    float bass_envelope = 0.0f;   // Explicit envelope follower for bass energy
+    float mid_envelope = 0.0f;    // Explicit envelope follower for mid energy
+    float treble_envelope = 0.0f; // Explicit envelope follower for treble energy
 
     // Instantaneous Energy Bands
     float bass_energy_instantaneous = 0.0f;   // Instantaneous low-frequency energy
