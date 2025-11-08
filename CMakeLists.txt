@@ -31,6 +31,8 @@ set(WHEN_SOURCES
   src/animations/pleasure_animation.cpp
   src/animations/animation_manager.cpp
   src/animations/glyph_utils.cpp
+  src/animations/band/instrument.cpp
+  src/animations/band/panel_controller.cpp
   src/animations/band/sprite_types.cpp
   src/animations/band/feature_taps.cpp
   external/kissfft/kiss_fft.c
@@ -76,6 +78,18 @@ target_link_libraries(sprite_player_harness PRIVATE PkgConfig::NOTCURSES)
 
 enable_testing()
 
+find_package(GTest CONFIG QUIET)
+if (NOT GTest_FOUND)
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+  )
+  # Prevent overriding the parent project's compiler/linker settings on Windows.
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+endif()
+
 add_executable(band_sprite_loader_test
   tests/band_sprite_loader_test.cpp
   src/animations/band/sprite_types.cpp
@@ -98,3 +112,21 @@ target_include_directories(band_feature_taps_test PRIVATE
 )
 
 add_test(NAME band_feature_taps_test COMMAND band_feature_taps_test)
+
+add_executable(band_instrument_state_machine_test
+  tests/band_instrument_state_machine_test.cpp
+  src/animations/band/instrument.cpp
+  src/animations/band/feature_taps.cpp
+)
+
+target_include_directories(band_instrument_state_machine_test PRIVATE
+  src
+)
+
+target_link_libraries(band_instrument_state_machine_test PRIVATE
+  PkgConfig::NOTCURSES
+  GTest::gtest
+  GTest::gtest_main
+)
+
+add_test(NAME band_instrument_state_machine_test COMMAND band_instrument_state_machine_test)
