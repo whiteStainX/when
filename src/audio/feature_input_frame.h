@@ -14,6 +14,7 @@ struct FeatureInputFrame {
     std::span<const std::pair<std::size_t, std::size_t>> band_bin_ranges; // Mapping of bands to FFT bins
     float sample_rate = 0.0f;                         // Sample rate associated with this frame
     float beat_strength = 0.0f;                       // Beat strength calculated by DSP
+    float frame_period = 0.0f;                        // Time in seconds represented by this frame
 };
 
 } // namespace when

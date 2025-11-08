@@ -210,6 +210,8 @@ void DspEngine::process_frame() {
     feature_input_frame_.band_bin_ranges = std::span<const std::pair<std::size_t, std::size_t>>(band_bin_ranges_);
     feature_input_frame_.sample_rate = static_cast<float>(sample_rate_);
     feature_input_frame_.beat_strength = beat_strength_;
+    feature_input_frame_.frame_period =
+        (sample_rate_ > 0) ? static_cast<float>(hop_size_) / static_cast<float>(sample_rate_) : 0.0f;
 
     latest_features_ = feature_extractor_.process(feature_input_frame_);
     events::AudioFeaturesUpdatedEvent features_event{latest_features_};
