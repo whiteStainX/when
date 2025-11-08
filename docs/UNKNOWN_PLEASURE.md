@@ -16,16 +16,16 @@ The animation is designed as a modular component that plugs directly into the ev
 
 - **Inheritance**: The `PleasureAnimation` class inherits from the base `Animation` interface, fulfilling its contract (`init`, `update`, `render`, etc.).
 - **Registration**: It is registered in the `AnimationManager`, which is responsible for its lifecycle.
-- **Event-Driven Updates**: The animation subscribes to the `FrameUpdateEvent` via the `EventBus`. On each frame, the `update` method receives fresh audio FFT data, which it uses to drive the animation's state.
+- **Event-Driven Updates**: The animation subscribes to the `FrameUpdateEvent` via the `EventBus`. On each frame, the `update` method receives freshly computed `AudioFeatures`, which it uses to drive the animation's state.
 - **Configuration**: The animation's numerous parameters are loaded from the `when.toml` file, allowing for easy tuning without recompiling.
 
 ## 3. The Generative Model: A Sum of Gaussian Ridges
 
-Early in the design process, we pivoted from a simple visualization of historical audio data to a more sophisticated **generative model**. Instead of directly plotting the FFT data, the animation *interprets* the audio's energy to drive a procedural system. This creates a more organic and aesthetically pleasing result.
+Early in the design process, we pivoted from a simple visualization of historical audio data to a more sophisticated **generative model**. Instead of directly plotting FFT magnitudes, the animation *interprets* the high-level audio features provided by the service to drive a procedural system. This creates a more organic and aesthetically pleasing result.
 
 ### The Core Components:
 
-1.  **Global Envelope**: The `update` method first calculates the overall energy of the low-frequency audio bands and tracks it in a smoothed `global_magnitude_` variable. This acts as a master "volume knob" for the animation's intensity.
+1.  **Global Envelope**: The `update` method first calculates the overall energy of the low-frequency audio bands (via the `AudioFeatures` values) and tracks it in a smoothed `global_magnitude_` variable. This acts as a master "volume knob" for the animation's intensity.
 
 2.  **The Ridge System**: The visual is composed of several "ridges" or peaks. Each ridge is an independent object (`RidgeState`) with its own position, magnitude, and movement characteristics. A random number of ridges are created for each line.
 

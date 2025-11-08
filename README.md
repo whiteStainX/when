@@ -6,7 +6,7 @@ A real-time, music-responsive terminal visualization inspired by the iconic "Unk
 
 ## Features
 
-- **Real-time Audio Analysis**: Captures system audio or microphone input and performs FFT to analyze frequency data.
+- **Real-time Audio Analysis**: Captures system audio or microphone input, performs FFT, and distills the spectrum into high-level `AudioFeatures` for consumers.
 - **Generative "Pleasure" Animation**: A procedurally generated, multi-layered line animation that reacts to audio energy and beat detection.
 - **Pseudo-3D Occlusion**: Nearer lines (lower on the screen) correctly hide farther lines, creating a sense of depth.
 - **High-Resolution Braille Rendering**: Uses 8-dot Braille characters via the Notcurses library to achieve high-density, expressive visuals in the terminal.

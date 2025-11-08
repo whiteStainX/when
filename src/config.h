@@ -68,8 +68,8 @@ struct AnimationConfig {
     int z_index = 0;
     bool initially_active = true; // New: whether the animation starts active
     // Trigger conditions
-    int trigger_band_index = -1; // -1 means no band-specific trigger
-    float trigger_threshold = 0.0f; // Threshold for band energy or beat strength
+    int trigger_band_index = -1; // -1 means no feature-specific trigger (0=bass,1=mid,2=treble,3=total,4=centroid)
+    float trigger_threshold = 0.0f; // Threshold for the selected audio feature or beat strength
     float trigger_beat_min = 0.0f; // Minimum beat strength to activate
     float trigger_beat_max = 1.0f; // Maximum beat strength to activate
     std::string text_file_path; // New: Path to text file for animations like RandomText
@@ -112,10 +112,10 @@ struct AnimationConfig {
     float breathe_vertical_scale = 0.55f; // Vertical scale correction for terminal aspect ratio
     float breathe_base_pulse_hz = 0.35f;  // Base breathing frequency in Hz
     float breathe_audio_pulse_weight = 0.65f; // How much audio energy speeds up the pulse
-    int breathe_band_index = -1;          // Optional FFT band to prioritise
+    int breathe_band_index = -1;          // Optional audio feature index to prioritise
     float breathe_rms_weight = 1.0f;      // Weight applied to RMS audio energy
     float breathe_beat_weight = 0.6f;     // Weight applied to beat strength
-    float breathe_band_weight = 0.5f;     // Weight applied to the selected FFT band
+    float breathe_band_weight = 0.5f;     // Weight applied to the selected audio feature
     float log_line_interval_s = 0.4f;     // Interval between log entries when streaming
     bool log_loop_messages = true;        // Whether to loop messages when the end is reached
     bool log_show_border = true;          // Display a frame border around the log window

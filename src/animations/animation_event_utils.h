@@ -31,8 +31,8 @@ inline float resolve_feature_value(const AudioFeatures& features, int index) {
     }
 }
 
-inline bool evaluate_band_condition(const AnimationConfig& config,
-                                    const AudioFeatures& features) {
+inline bool evaluate_feature_condition(const AnimationConfig& config,
+                                       const AudioFeatures& features) {
     if (config.trigger_band_index == -1) {
         return true;
     }
@@ -62,10 +62,10 @@ void bind_standard_frame_updates(AnimationT* animation,
     AnimationConfig captured_config = config;
     auto handle = bus.subscribe<events::FrameUpdateEvent>(
         [animation, captured_config](const events::FrameUpdateEvent& event) {
-            const bool meets_band = evaluate_band_condition(captured_config, event.features);
+            const bool meets_feature = evaluate_feature_condition(captured_config, event.features);
             const bool meets_beat = evaluate_beat_condition(captured_config, event.features);
             const bool should_be_active = has_custom_triggers(captured_config)
-                                              ? (meets_band && meets_beat)
+                                              ? (meets_feature && meets_beat)
                                               : captured_config.initially_active;
 
             if (should_be_active && !animation->is_active()) {
