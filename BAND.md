@@ -18,12 +18,12 @@ This document formalizes the “band members in 2×2 comic panels” concept int
 - Panels show optional **borders** and **titles**; borders are drawn once at init for performance.
 
 ### 1.2 Audio‑to‑Character Mapping (live, mixed signal)
-- The engine consumes **high-level features** (not raw audio): smoothed/instant energies, per-band onsets/flux, LUFS, spectral flatness/centroid/roll-off, optional chroma, optional HPSS split, beat/bar phases.
+- The animation consumes the **existing `AudioFeatures` contract**: smoothed & instantaneous band energies (`bass|mid|treble`), envelope followers, per-band onset flags, global beat/bar metadata, spectral centroid/flatness, the chroma vector, and the raw `band_flux` span supplied by the DSP stage. No additional LUFS, roll-off, or HPSS outputs are required up-front.
 - **Instrument heuristics** (live-feasible, no heavy separation):
-  - **Drummer**: percussive onsets density (bass+treble), HPSS percussive share (if enabled).
-  - **Bassist**: low-band envelope level + low-band onset streaks.
-  - **Vocal**: mid-band energy + **low spectral flatness** (tonal) + **chroma coherence** (dominant pitch classes).
-  - **Guitar/Lead**: mid/treble envelope + higher flatness and/or rising roll-off (brightness).
+  - **Drummer**: percussive density inferred from **bass/treble beat flags** and aggregated high-frequency `band_flux`.
+  - **Bassist**: low-band envelope level + streaks of bass-band onsets; uses low-frequency `band_flux` as a sustain proxy.
+  - **Vocal**: mid-band energy + **low spectral flatness** (tonal) + dominance of one chroma bin when `chroma_available`.
+  - **Guitar/Lead**: mid/treble envelope + higher spectral centroid + mid/high `band_flux` for articulation.
 - **Hysteresis + timers** for all state transitions to avoid flapping in noisy environments.
 - **Beat/Bar phase locking**: Spotlight entries occur on **beats** (or bar boundaries) to feel musical.
 - **Priority & exclusivity**: when a member enters Spotlight, hold it for `N` beats/bars unless a stronger event claims the focus.
@@ -124,14 +124,15 @@ struct MemberConfig {
 // Heuristics input (subset of AudioFeatures cached per frame)
 struct FeatureView {
   float bass_env, mid_env, treble_env;
-  float flatness, rolloff;
+  float bass_instant, mid_instant, treble_instant;
+  float total_energy;
+  float flatness, centroid_norm; // centroid normalized against expected min/max
   float beat_phase, bar_phase;
-  float percussive_ratio;   // if HPSS available else ~0
-  float low_flux, mid_flux, high_flux;
+  float low_flux, mid_flux, high_flux; // aggregated from AudioFeatures::band_flux spans
   bool  beat_now;
+  bool  bass_beat, mid_beat, treble_beat;
   bool  chroma_available;
-  float chroma_coherence;   // e.g., max bin / sum
-  float lufs_short;         // optional for scene gating
+  float chroma_dominance;   // max(chroma) / sum(chroma) when available
 };
 
 class InstrumentHeuristics {
@@ -239,17 +240,17 @@ assets/sprites/
 > Tune via TOML; these are safe starting points.
 
 - **Drummer**
-  - `activity = clamp01( 0.6*percussive_ratio + 0.2*low_flux + 0.2*high_flux )`
-  - Spotlight when: `percussive_ratio > 0.65 && onset_density_last_1s > 5/s`
+  - `activity = clamp01( 0.35*(bass_instant + treble_instant) + 0.3*high_flux + 0.35*(bass_beat || treble_beat ? 1.0 : 0.0) )`
+  - Spotlight when: `(bass_beat || treble_beat)` fires ≥4 times in the last bar **and** `high_flux > 0.6`.
 - **Bassist**
-  - `activity = clamp01( 0.7*bass_env + 0.3*low_flux )`
-  - Spotlight when: `bass_env > P90(10s) && low_flux > P70(10s)` for ≥ ½ bar
+  - `activity = clamp01( 0.6*bass_env + 0.25*bass_instant + 0.15*low_flux )`
+  - Spotlight when: `bass_env` exceeds its rolling 8‑bar median by 40% for ≥½ bar and `low_flux > 0.55`.
 - **Vocal**
-  - `activity = clamp01( 0.5*mid_env + 0.3*(1-flatness) + 0.2*chroma_coherence )`
-  - Spotlight when: `mid_env high` & `(1-flatness) > 0.7` & `chroma_coherence > 0.5` for ≥ ½ bar
+  - `activity = clamp01( 0.45*mid_env + 0.3*(1-flatness) + 0.25*chroma_dominance )`
+  - Spotlight when: `(1-flatness) > 0.7`, `chroma_dominance > 0.5` (or `mid_env > 0.75` when chroma disabled) for ≥½ bar.
 - **Guitar/Lead**
-  - `activity = clamp01( 0.4*mid_env + 0.4*treble_env + 0.2*(flatness + rolloff_norm) )`
-  - Spotlight when: sustained mid/treble onsets and rising roll-off over 1 bar
+  - `activity = clamp01( 0.35*mid_env + 0.35*treble_env + 0.3*(centroid_norm + 0.5*mid_flux + 0.5*high_flux) )`
+  - Spotlight when: `mid_flux` and `high_flux` stay above 0.6 for a full bar and `centroid_norm` trends upward.
 
 **State transitions** (per member):
 - **Idle → Normal**: `activity > idle_floor` for `> idle_hold_sec`
@@ -294,61 +295,9 @@ files = { idle="guitarist/idle.txt", normal="guitarist/normal.txt", fast="guitar
 # Repeat for bass/drums/vocal with role-appropriate thresholds
 ```
 
----
-
-## 8) Phased Implementation Plan
-
-### Phase 0 — Foundations (1–2 days)
-- Implement `SpriteFrame`, `SpriteSet`, `SpritePlayer`, loader for stacked‑frames text files.
-- Create a tiny test app to blit sequences to an `ncplane` at fixed fps. Verify row-writing performance and UTF‑8 handling.
-
-### Phase 1 — Single Panel Prototype (1–2 days)
-- Implement `InstrumentHeuristics` and `InstrumentStateMachine` with hardcoded thresholds.
-- Build `PanelController` for **one** role (e.g., Drummer). Wire to `AudioFeatures`. Use minimal sprites.
-- Validate state transitions and beat‑aligned frame stepping.
-
-### Phase 2 — Full 2×2 Layout (1–2 days)
-- Implement `BandDirectorAnimation`: panel layout, borders, titles.
-- Instantiate four `PanelController`s with role‑specific configs. Confirm per‑panel performance at 60 FPS.
-
-### Phase 3 — Spotlight & Zoom (1–2 days)
-- Add spotlight policy (priority, exclusivity, min bar hold). Enter/exit on beat boundaries.
-- Provide multi‑resolution sprites for spotlight. Implement gentle plane translation for “camera drift”.
-
-### Phase 4 — Heuristic Tuning & Config (ongoing)
-- Move thresholds/timers to `when.toml`. Add per‑member sections.
-- Add chroma/HPSS‑aware branches when those features are enabled; fallback when disabled.
-- Record short sessions to CSV (feature taps) and tune thresholds offline.
-
-### Phase 5 — Polish & Reliability
-- Add **graceful degradation** flags (disable spotlight or lower sprite fps if render budget exceeded).
-- Add hotkeys: toggle borders, show per‑panel debug meters (activity, spotlight_score).
+> **Loader note**: extend `AppConfig` / `AnimationConfig` in `src/config.h` and update `src/config.cpp`
+> so `[visual.band]` and the nested member tables populate runtime structures. Without this change
+> the band animation configuration will be ignored.
 
 ---
 
-## 9) Testing Checklist
-
-- UTF‑8 safety with Braille; ensure `setlocale(LC_ALL,"")` before notcurses init.
-- Sprite loader: mismatched widths/heights rejected with a clear log.
-- Render budget respected at 60 FPS (measure average and p95).
-- Spotlight transitions only on beats; no thrashing under noisy input.
-- Heuristics degrade gracefully without HPSS/Chroma.
-
----
-
-## 10) Deliverables
-
-- `src/animations/band_director_animation.{h,cpp}`
-- `src/animations/panel_controller.{h,cpp}`
-- `src/animations/sprite_loader.{h,cpp}` (and `SpriteFrame`, `SpriteSet`, `SpritePlayer`)
-- `assets/sprites/<member>/<state>.txt` sample packs
-- `when.toml` updates under `[visual.band]` and `[visual.band.members.*]`
-
----
-
-## 11) Notes & Tips
-
-- Braille gives **2×4 subpixels per cell**—prefer it for hands/face detail.
-- Keep **row strings** contiguous; they’re much faster than per‑cell writes.
-- Tie animation cadence to **beat/bar** for musicality; use timers for hysteresis.
-- Start simple sprites first; refine art later—logic and timing matter most initially.
