@@ -53,7 +53,6 @@ private:
     std::vector<float> frame_buffer_;
     std::deque<float> mono_fifo_;
 
-    std::vector<float> band_energies_;
     std::vector<std::pair<std::size_t, std::size_t>> band_bin_ranges_;
     std::vector<float> prev_magnitudes_;
     std::vector<float> instantaneous_band_energies_;
@@ -69,8 +68,6 @@ private:
     std::vector<kiss_fft_cpx> fft_in_;
     std::vector<kiss_fft_cpx> fft_out_;
 
-    float smoothing_attack_;
-    float smoothing_release_;
     float flux_average_;
     float beat_strength_;
 };

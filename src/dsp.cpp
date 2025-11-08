@@ -33,7 +33,6 @@ DspEngine::DspEngine(events::EventBus& event_bus,
       hop_size_(hop_size),
       window_(fft_size_, 0.0f),
       frame_buffer_(fft_size_, 0.0f),
-      band_energies_(bands, 0.0f),
       band_bin_ranges_(bands),
       prev_magnitudes_(bands, 0.0f),
       instantaneous_band_energies_(bands, 0.0f),
@@ -43,8 +42,6 @@ DspEngine::DspEngine(events::EventBus& event_bus,
       fft_cfg_(nullptr),
       fft_in_(fft_size_),
       fft_out_(fft_size_),
-      smoothing_attack_(0.35f),
-      smoothing_release_(0.08f),
       flux_average_(0.0f),
       beat_strength_(0.0f) {
     if (fft_size_ < 2 || (fft_size_ & (fft_size_ - 1)) != 0) {
@@ -70,7 +67,7 @@ DspEngine::DspEngine(events::EventBus& event_bus,
     }
 
     compute_band_ranges();
-    feature_extractor_.prepare(band_energies_.size());
+    feature_extractor_.prepare(band_bin_ranges_.size());
 }
 
 DspEngine::~DspEngine() {
@@ -108,7 +105,7 @@ void DspEngine::push_samples(const float* interleaved_samples, std::size_t count
 }
 
 void DspEngine::compute_band_ranges() {
-    const std::size_t bands = band_energies_.size();
+    const std::size_t bands = band_bin_ranges_.size();
     if (bands == 0) {
         return;
     }
@@ -177,11 +174,7 @@ void DspEngine::process_frame() {
         }
         const float delta = std::max(0.0f, magnitude - previous);
         flux += delta;
-        const float current = band_energies_[band];
-        const float target = magnitude;
-        const float alpha = (target > current) ? smoothing_attack_ : smoothing_release_;
-        band_energies_[band] = current + (target - current) * alpha;
-        instantaneous_band_energies_[band] = target;
+        instantaneous_band_energies_[band] = magnitude;
         band_flux_[band] = delta;
     }
 
@@ -198,7 +191,7 @@ void DspEngine::process_frame() {
     feature_input_frame_.fft_phases = std::span<const float>(fft_phases_);
     feature_input_frame_.instantaneous_band_energies =
         std::span<const float>(instantaneous_band_energies_);
-    feature_input_frame_.smoothed_band_energies = std::span<const float>(band_energies_);
+    feature_input_frame_.smoothed_band_energies = std::span<const float>();
     feature_input_frame_.band_flux = std::span<const float>(band_flux_);
     feature_input_frame_.beat_strength = beat_strength_;
 

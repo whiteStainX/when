@@ -23,6 +23,8 @@ public:
         BandRange treble_range{0.7f, 1.0f};
         float beat_detection_threshold = 0.35f;
         float silence_threshold = 1e-5f;
+        float smoothing_attack = 0.35f;
+        float smoothing_release = 0.08f;
     };
 
     FeatureExtractor();
@@ -59,7 +61,6 @@ private:
     std::size_t band_count_ = 0;
     std::vector<float> weighting_curve_;
     std::vector<float> band_envelopes_;
-    std::vector<float> last_band_energies_;
     std::vector<float> onset_history_;
     std::size_t onset_history_write_pos_ = 0;
     TempoTrackerState tempo_state_{};
