@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 namespace when {
 
 struct AudioFeatures {
@@ -21,6 +23,9 @@ struct AudioFeatures {
 
     // Spectral Features
     float spectral_centroid = 0.0f; // Represents the "brightness" of the sound
+
+    // Raw analysis context
+    std::span<const float> band_flux; // Per-band spectral flux deltas from the DSP stage
 };
 
 } // namespace when
