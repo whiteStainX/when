@@ -6,7 +6,7 @@ This document outlines the high-level architecture of the `when` audio visualize
 
 - **`main.cpp`**: The application entry point. It handles command-line parsing, initializes all core modules, and runs the main application loop.
 - **`AudioEngine`**: Responsible for all audio input. It captures audio from a microphone or system, or streams from a file, providing raw audio samples.
-- **`DspEngine`**: Performs digital signal processing. Its primary functions are Fast Fourier Transform (FFT), beat detection, and spectral analysis. **It acts as a primary event emitter**, publishing events like `BeatDetectedEvent` and `SpectralNoveltyEvent`.
+- **`DspEngine`**: Performs digital signal processing. Its primary functions are Fast Fourier Transform (FFT), beat detection, and spectral analysis. **It acts as a primary event emitter**, publishing events like `BeatDetectedEvent` and `AudioFeaturesUpdatedEvent`.
 - **`EventBus`**: The central dispatcher for the event-driven system. It receives events from publishers and forwards them to subscribers, decoupling the components.
 - **`AnimationManager`**: Orchestrates the animation subsystem. It loads animations from the configuration, publishes the main `FrameUpdateEvent` to the `EventBus` on each frame, and manages the rendering of all active animations.
 - **`Animation` (Interface)**: The base class for all visual effects. Concrete animations inherit from this, implement their visual logic, and subscribe to events via the `bind_events` method.
@@ -35,7 +35,7 @@ This document outlines the high-level architecture of the `when` audio visualize
 
 1.  **Audio Processing:** In the main loop, `main.cpp` reads raw audio from the `AudioEngine` and pushes it to the `DspEngine`.
 2.  **DSP Event Publishing:** The `DspEngine` analyzes the audio and publishes specific, high-level events (e.g., `BeatDetectedEvent`, `SpectralNoveltyEvent`) directly to the `EventBus`.
-3.  **Frame Event Publishing:** `main.cpp` calls `animation_manager.update_all()`, which publishes the general `FrameUpdateEvent` containing timing information and raw FFT data.
+3.  **Frame Event Publishing:** `main.cpp` calls `animation_manager.update_all()`, which publishes the general `FrameUpdateEvent` containing timing information, audio metrics, and the latest `AudioFeatures` snapshot.
 4.  **Event Dispatching & Animation Logic:** The `EventBus` forwards all events to the `Animation` instances that have subscribed to them. The animations react to these events to update their internal state and visuals.
 5.  **Rendering:** After events are published, `main.cpp` calls `animation_manager.render_all()`, which renders all active animations.
 
@@ -49,7 +49,7 @@ This document outlines the high-level architecture of the `when` audio visualize
 ### `AnimationManager`
 
 - `load_animations(nc, app_config)`: Loads all animations from the config and calls their `bind_events` method.
-- `update_all(delta_time, metrics, bands, beat_strength)`: Publishes the frame's general `FrameUpdateEvent`.
+- `update_all(delta_time, metrics, features)`: Publishes the frame's general `FrameUpdateEvent`.
 - `render_all(nc)`: Renders all active animations.
 
 ### `Animation` (Interface)

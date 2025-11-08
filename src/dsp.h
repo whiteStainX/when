@@ -35,8 +35,6 @@ public:
 
     void push_samples(const float* interleaved_samples, std::size_t count);
 
-    const std::vector<float>& band_energies() const { return band_energies_; }
-    float beat_strength() const { return beat_strength_; }
     const AudioFeatures& audio_features() const { return latest_features_; }
 
 private:
