@@ -427,6 +427,100 @@ std::optional<AnimationConfig> parse_animation_config(
         parse_float32(pleasure_profile_noise_amount_it->second.value,
                       anim_config.pleasure_profile_noise_amount);
     }
+    const auto pleasure_beat_phase_depth_it = raw_anim_config.find("pleasure_beat_phase_depth");
+    if (pleasure_beat_phase_depth_it != raw_anim_config.end()) {
+        parse_float32(pleasure_beat_phase_depth_it->second.value, anim_config.pleasure_beat_phase_depth);
+    }
+    const auto pleasure_beat_phase_power_it = raw_anim_config.find("pleasure_beat_phase_power");
+    if (pleasure_beat_phase_power_it != raw_anim_config.end()) {
+        parse_float32(pleasure_beat_phase_power_it->second.value, anim_config.pleasure_beat_phase_power);
+    }
+    const auto pleasure_beat_pulse_attack_it = raw_anim_config.find("pleasure_beat_pulse_attack");
+    if (pleasure_beat_pulse_attack_it != raw_anim_config.end()) {
+        parse_float32(pleasure_beat_pulse_attack_it->second.value, anim_config.pleasure_beat_pulse_attack);
+    }
+    const auto pleasure_beat_pulse_release_it = raw_anim_config.find("pleasure_beat_pulse_release");
+    if (pleasure_beat_pulse_release_it != raw_anim_config.end()) {
+        parse_float32(pleasure_beat_pulse_release_it->second.value, anim_config.pleasure_beat_pulse_release);
+    }
+    const auto pleasure_beat_phase_sway_it = raw_anim_config.find("pleasure_beat_phase_sway");
+    if (pleasure_beat_phase_sway_it != raw_anim_config.end()) {
+        parse_float32(pleasure_beat_phase_sway_it->second.value, anim_config.pleasure_beat_phase_sway);
+    }
+    const auto pleasure_downbeat_flash_strength_it = raw_anim_config.find("pleasure_downbeat_flash_strength");
+    if (pleasure_downbeat_flash_strength_it != raw_anim_config.end()) {
+        parse_float32(pleasure_downbeat_flash_strength_it->second.value,
+                      anim_config.pleasure_downbeat_flash_strength);
+    }
+    const auto pleasure_downbeat_flash_decay_it = raw_anim_config.find("pleasure_downbeat_flash_decay");
+    if (pleasure_downbeat_flash_decay_it != raw_anim_config.end()) {
+        parse_float32(pleasure_downbeat_flash_decay_it->second.value, anim_config.pleasure_downbeat_flash_decay);
+    }
+    const auto pleasure_global_headroom_it = raw_anim_config.find("pleasure_global_headroom");
+    if (pleasure_global_headroom_it != raw_anim_config.end()) {
+        parse_float32(pleasure_global_headroom_it->second.value, anim_config.pleasure_global_headroom);
+    }
+    const auto pleasure_ridge_headroom_it = raw_anim_config.find("pleasure_ridge_headroom");
+    if (pleasure_ridge_headroom_it != raw_anim_config.end()) {
+        parse_float32(pleasure_ridge_headroom_it->second.value, anim_config.pleasure_ridge_headroom);
+    }
+    const auto pleasure_profile_headroom_it = raw_anim_config.find("pleasure_profile_headroom");
+    if (pleasure_profile_headroom_it != raw_anim_config.end()) {
+        parse_float32(pleasure_profile_headroom_it->second.value, anim_config.pleasure_profile_headroom);
+    }
+    const auto pleasure_soft_clip_knee_it = raw_anim_config.find("pleasure_soft_clip_knee");
+    if (pleasure_soft_clip_knee_it != raw_anim_config.end()) {
+        parse_float32(pleasure_soft_clip_knee_it->second.value, anim_config.pleasure_soft_clip_knee);
+    }
+    const auto pleasure_band_beat_gain_it = raw_anim_config.find("pleasure_band_beat_gain");
+    if (pleasure_band_beat_gain_it != raw_anim_config.end()) {
+        parse_float32(pleasure_band_beat_gain_it->second.value, anim_config.pleasure_band_beat_gain);
+    }
+    const auto pleasure_band_beat_decay_it = raw_anim_config.find("pleasure_band_beat_decay");
+    if (pleasure_band_beat_decay_it != raw_anim_config.end()) {
+        parse_float32(pleasure_band_beat_decay_it->second.value, anim_config.pleasure_band_beat_decay);
+    }
+    const auto pleasure_band_reseed_jitter_it = raw_anim_config.find("pleasure_band_reseed_jitter");
+    if (pleasure_band_reseed_jitter_it != raw_anim_config.end()) {
+        parse_float32(pleasure_band_reseed_jitter_it->second.value, anim_config.pleasure_band_reseed_jitter);
+    }
+    const auto pleasure_highlight_flux_threshold_it = raw_anim_config.find("pleasure_highlight_flux_threshold");
+    if (pleasure_highlight_flux_threshold_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_flux_threshold_it->second.value,
+                      anim_config.pleasure_highlight_flux_threshold);
+    }
+    const auto pleasure_highlight_attack_it = raw_anim_config.find("pleasure_highlight_attack");
+    if (pleasure_highlight_attack_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_attack_it->second.value, anim_config.pleasure_highlight_attack);
+    }
+    const auto pleasure_highlight_release_it = raw_anim_config.find("pleasure_highlight_release");
+    if (pleasure_highlight_release_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_release_it->second.value, anim_config.pleasure_highlight_release);
+    }
+    const auto pleasure_highlight_width_it = raw_anim_config.find("pleasure_highlight_width");
+    if (pleasure_highlight_width_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_width_it->second.value, anim_config.pleasure_highlight_width);
+    }
+    const auto pleasure_highlight_gain_it = raw_anim_config.find("pleasure_highlight_gain");
+    if (pleasure_highlight_gain_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_gain_it->second.value, anim_config.pleasure_highlight_gain);
+    }
+    const auto pleasure_highlight_position_smoothing_it =
+        raw_anim_config.find("pleasure_highlight_position_smoothing");
+    if (pleasure_highlight_position_smoothing_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_position_smoothing_it->second.value,
+                      anim_config.pleasure_highlight_position_smoothing);
+    }
+    const auto pleasure_highlight_flatness_threshold_it =
+        raw_anim_config.find("pleasure_highlight_flatness_threshold");
+    if (pleasure_highlight_flatness_threshold_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_flatness_threshold_it->second.value,
+                      anim_config.pleasure_highlight_flatness_threshold);
+    }
+    const auto pleasure_highlight_tonal_bias_it = raw_anim_config.find("pleasure_highlight_tonal_bias");
+    if (pleasure_highlight_tonal_bias_it != raw_anim_config.end()) {
+        parse_float32(pleasure_highlight_tonal_bias_it->second.value, anim_config.pleasure_highlight_tonal_bias);
+    }
 
     const auto pleasure_min_ridges_it = raw_anim_config.find("pleasure_min_ridges");
     if (pleasure_min_ridges_it != raw_anim_config.end()) {
