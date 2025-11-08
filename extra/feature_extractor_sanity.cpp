@@ -9,6 +9,7 @@ int main() {
 
     FeatureExtractor extractor;
     std::vector<float> synthetic_bands = {0.9f, 0.8f, 0.2f, 0.1f, 0.05f, 0.02f, 0.01f, 0.005f};
+    extractor.prepare(synthetic_bands.size());
 
     const float beat_strength = 0.5f;
     const auto features = extractor.process(synthetic_bands, beat_strength);

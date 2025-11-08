@@ -66,6 +66,7 @@ DspEngine::DspEngine(events::EventBus& event_bus,
     }
 
     compute_band_ranges();
+    feature_extractor_.prepare(band_energies_.size());
 }
 
 DspEngine::~DspEngine() {
