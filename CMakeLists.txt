@@ -32,6 +32,7 @@ set(WHEN_SOURCES
   src/animations/animation_manager.cpp
   src/animations/glyph_utils.cpp
   src/animations/band/sprite_types.cpp
+  src/animations/band/feature_taps.cpp
   external/kissfft/kiss_fft.c
 )
 
@@ -78,6 +79,7 @@ enable_testing()
 add_executable(band_sprite_loader_test
   tests/band_sprite_loader_test.cpp
   src/animations/band/sprite_types.cpp
+  src/animations/band/feature_taps.cpp
 )
 
 target_include_directories(band_sprite_loader_test PRIVATE
@@ -85,3 +87,14 @@ target_include_directories(band_sprite_loader_test PRIVATE
 )
 
 add_test(NAME band_sprite_loader_test COMMAND band_sprite_loader_test)
+
+add_executable(band_feature_taps_test
+  tests/band_feature_taps_test.cpp
+  src/animations/band/feature_taps.cpp
+)
+
+target_include_directories(band_feature_taps_test PRIVATE
+  src
+)
+
+add_test(NAME band_feature_taps_test COMMAND band_feature_taps_test)
