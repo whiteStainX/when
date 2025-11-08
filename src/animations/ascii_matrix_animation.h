@@ -1,5 +1,6 @@
 #pragma once
 
+#include <random>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,18 @@ public:
     void bind_events(const AnimationConfig& config, events::EventBus& bus) override;
 
 private:
+    bool load_glyphs_from_file(const std::string& path);
+    void ensure_dimensions_fit();
+    void draw_border();
+    void draw_matrix();
+    void reset_internal_state();
+    void allocate_buffers();
+    void refresh_pattern();
+    void update_lane_intensities(float delta_time, const AudioFeatures& features);
+    void update_step_highlight(float delta_time, const AudioFeatures& features);
+    void update_cell_targets(float delta_time);
+    int resolve_lane_for_row(int row) const;
+
     ncplane* plane_ = nullptr;
     int z_index_ = 0;
     bool is_active_ = true;
@@ -51,15 +64,18 @@ private:
     float beat_threshold_ = 0.6f;
 
     std::vector<float> cell_values_;
+    std::vector<float> target_cells_;
+    std::vector<float> lane_levels_;
     float latest_beat_strength_ = 0.0f;
+    float highlight_pulse_ = 0.0f;
+    int highlighted_step_ = -1;
+    bool latest_downbeat_ = false;
 
     std::vector<std::string> glyphs_;
     std::string glyphs_file_path_;
+    bool pattern_dirty_ = true;
 
-    bool load_glyphs_from_file(const std::string& path);
-    void ensure_dimensions_fit();
-    void draw_border();
-    void draw_matrix();
+    std::mt19937 rng_;
 };
 
 } // namespace animations
