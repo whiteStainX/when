@@ -15,8 +15,9 @@ constexpr float kDeltaSeconds = 1.0f / 60.0f;
 
 int main(int argc, char** argv) {
     namespace fs = std::filesystem;
-    using when::animations::band::SpriteFileSet;
     using when::animations::band::SpritePlayer;
+    using when::animations::band::SpriteSequence;
+    using when::animations::band::load_sprite_sequence_from_directory;
 
     fs::path assets_root = "assets/sprites";
     if (argc > 1) {
@@ -24,17 +25,9 @@ int main(int argc, char** argv) {
     }
 
     try {
-        SpriteFileSet files{
-            .idle = "guitarist/idle.txt",
-            .normal = "guitarist/normal.txt",
-            .fast = "guitarist/fast.txt",
-            .spotlight = "guitarist/spotlight.txt",
-            .spotlight_hi = std::nullopt,
-        };
-
-        auto set = when::animations::band::load_sprite_set(assets_root, files);
-        if (set.idle.empty()) {
-            fprintf(stderr, "No idle frames loaded\n");
+        SpriteSequence sequence = load_sprite_sequence_from_directory(assets_root / "guitarist");
+        if (sequence.empty()) {
+            fprintf(stderr, "No frames loaded for guitarist sequence\n");
             return 1;
         }
 
@@ -48,7 +41,7 @@ int main(int argc, char** argv) {
 
         ncplane* stdplane = notcurses_stddim_yx(nc, nullptr, nullptr);
         SpritePlayer player;
-        player.set_sequence(&set.idle);
+        player.set_sequence(&sequence);
         player.set_fps(6.0f);
 
         bool running = true;
@@ -81,4 +74,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
