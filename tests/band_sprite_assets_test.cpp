@@ -11,6 +11,7 @@ namespace fs = std::filesystem;
 int main() {
     using when::animations::band::SpriteFileSet;
     using when::animations::band::SpriteSequence;
+    using when::animations::band::load_sprite_sequence_from_directory;
     using when::animations::band::load_sprite_sequence_from_file;
     using when::animations::band::load_sprite_set;
 
@@ -18,6 +19,7 @@ int main() {
     assert(fs::exists(sprites_root) && fs::is_directory(sprites_root));
 
     const std::vector<std::string> members{"guitarist", "bassist", "drummer", "vocal"};
+    const std::vector<std::string> directory_members{"directory_demo"};
 
     const SpriteFileSet required_files{
         .idle = "idle.txt",
@@ -57,6 +59,23 @@ int main() {
         assert(!set.normal.empty() && "Normal animation must have frames");
         assert(!set.fast.empty() && "Fast animation must have frames");
         assert(!set.spotlight.empty() && "Spotlight animation must have frames");
+    }
+
+    for (const auto& member : directory_members) {
+        const fs::path member_root = sprites_root / member;
+        assert(fs::exists(member_root) && fs::is_directory(member_root));
+
+        when::animations::band::SpriteSequence sequence;
+        try {
+            sequence = load_sprite_sequence_from_directory(member_root);
+        } catch (...) {
+            assert(false && "Directory-based sprite sequence failed to load");
+        }
+
+        assert(sequence.size() == 3 && "Directory demo must expose three frames");
+        assert(sequence.at(0).rows.front() == "A");
+        assert(sequence.at(1).rows.front() == "B");
+        assert(sequence.at(2).rows.front() == "C");
     }
 
     return 0;
