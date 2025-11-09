@@ -11,6 +11,10 @@ namespace when {
 namespace animations {
 namespace band {
 
+#ifndef WHEN_BAND_ENABLE_DIRECTORY_LAYOUT
+#define WHEN_BAND_ENABLE_DIRECTORY_LAYOUT 0
+#endif
+
 struct SpriteFrame {
     int width = 0;
     int height = 0;
@@ -74,6 +78,8 @@ struct SpriteFileSet {
 
 std::vector<SpriteFrame> load_sprite_frames_from_file(const std::filesystem::path& path);
 SpriteSequence load_sprite_sequence_from_file(const std::filesystem::path& path);
+SpriteSequence load_sprite_sequence_from_directory(const std::filesystem::path& directory);
+SpriteSequence load_sprite_sequence(const std::filesystem::path& path);
 SpriteSet load_sprite_set(const std::filesystem::path& root, const SpriteFileSet& files);
 
 } // namespace band

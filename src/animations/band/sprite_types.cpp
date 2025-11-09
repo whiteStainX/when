@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <fstream>
 #include <stdexcept>
+#include <system_error>
 
 namespace when {
 namespace animations {
@@ -163,6 +164,88 @@ SpriteSequence load_sprite_sequence_from_file(const std::filesystem::path& path)
     SpriteSequence sequence;
     sequence.frames = load_sprite_frames_from_file(path);
     return sequence;
+}
+
+SpriteSequence load_sprite_sequence_from_directory(const std::filesystem::path& directory) {
+    namespace fs = std::filesystem;
+
+    std::error_code ec;
+    if (!fs::exists(directory, ec)) {
+        throw std::runtime_error("Sprite directory does not exist: " + directory.string());
+    }
+
+    if (!fs::is_directory(directory, ec) || ec) {
+        throw std::runtime_error("Sprite directory path is not a directory: " + directory.string());
+    }
+
+    std::vector<fs::directory_entry> entries;
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+
+        const auto extension = entry.path().extension();
+        if (!extension.empty() && extension != ".txt") {
+            continue;
+        }
+
+        entries.emplace_back(entry);
+    }
+
+    if (entries.empty()) {
+        throw std::runtime_error("Sprite directory contains no frame files: " + directory.string());
+    }
+
+    std::sort(entries.begin(), entries.end(), [](const fs::directory_entry& a, const fs::directory_entry& b) {
+        return a.path().filename().string() < b.path().filename().string();
+    });
+
+    SpriteSequence sequence;
+    int expected_width = -1;
+    int expected_height = -1;
+
+    for (const auto& entry : entries) {
+        auto frames = load_sprite_frames_from_file(entry.path());
+        if (frames.size() != 1) {
+            throw std::runtime_error("Directory-based sprite loader expects exactly one frame per file: " +
+                                     entry.path().string());
+        }
+
+        SpriteFrame frame = std::move(frames.front());
+        if (expected_width == -1 && expected_height == -1) {
+            expected_width = frame.width;
+            expected_height = frame.height;
+        } else if (frame.width != expected_width || frame.height != expected_height) {
+            throw std::runtime_error("Sprite frame dimensions mismatch in directory: " + directory.string());
+        }
+
+        sequence.frames.emplace_back(std::move(frame));
+    }
+
+    return sequence;
+}
+
+SpriteSequence load_sprite_sequence(const std::filesystem::path& path) {
+    namespace fs = std::filesystem;
+
+#if WHEN_BAND_ENABLE_DIRECTORY_LAYOUT
+    std::error_code ec;
+    const bool exists = fs::exists(path, ec);
+    if (ec) {
+        throw std::runtime_error("Failed to stat sprite path: " + path.string());
+    }
+
+    if (exists && fs::is_directory(path)) {
+        return load_sprite_sequence_from_directory(path);
+    }
+#else
+    std::error_code legacy_ec;
+    if (fs::is_directory(path, legacy_ec) && !legacy_ec) {
+        throw std::runtime_error("Directory sprite layout disabled via WHEN_BAND_ENABLE_DIRECTORY_LAYOUT");
+    }
+#endif
+
+    return load_sprite_sequence_from_file(path);
 }
 
 SpriteSet load_sprite_set(const std::filesystem::path& root, const SpriteFileSet& files) {
