@@ -33,24 +33,30 @@ investing in subsequent work.
    configuration from the live `FeatureExtractor` settings so telemetry mirrors runtime
    behavior.
 
-## Phase 2 – Direct-Drive Panel Prototype
+## Phase 2 – Direct-Drive Speed Control Prototype
 
-**Goal:** Create a working, single-panel animation that directly maps audio features to sprite changes, without a formal state machine. This prioritizes immediate visual feedback.
+**Goal:** Create a working, single-panel animation that loads a sequence of sprite files from a directory and directly maps audio features to the sequence's playback speed.
 
-1.  **Instrument Heuristics Implementation**
-    Implement the full `InstrumentHeuristics` table for **all four roles** (Drummer, Bassist, Guitarist, Vocalist) using the cues documented in `BAND.md` (beat flags for percussion, sustained low-end energy for bass, mid/high dynamics for guitar, and melodic dominance for vocals). Each heuristic produces two primary outputs: an `activity_score` in `[0,1]` and a `spotlight_score` placeholder that currently mirrors `activity_score` so Phase 3 has a stable API.
-    _Validation_: Extend the deterministic test harness to load captured `FeatureView` fixtures representing percussion-heavy, bass-heavy, guitar-featured, and vocal-featured passages. Assert that each role's `activity_score` is highest during its featured passage and remains below `config.idle_floor` in unrelated sections. Add regression fixtures to CI so future tuning keeps the relative ordering intact.
+1.  **Asset Loading for a Single Sequence**  
+    Update the asset loading logic (`SpriteSet` or a new `SpriteLoader` class). It must now be able to take a directory path (e.g., `assets/sprites/drummer/`) and treat **each `.txt` file within it as a single frame**. The loader will read all `.txt` files, sorted alphabetically, into one `std::vector<SpriteFrame>` that represents the complete, looping animation for that character.
+    _Validation_: A unit test (`band_sprite_loader_test.cpp`) confirms that loading the `assets/sprites/drummer/` directory results in a vector containing exactly 4 `SpriteFrame` objects, with the content of each matching the respective `.txt` file.
 
-2.  **Simplified PanelController**
-    Create the `PanelController` but **without** the `InstrumentStateMachine`. Its `update` loop will:
-    a.  Call the `InstrumentHeuristics` to get the current `activity_score`.
-    b.  Apply a minimal smoothing pass to the raw score (e.g., exponential moving average or short hold timer) so brief spikes do not thrash between loops. Persist the smoothed value per panel.
-    c.  Use a simple `if/else if/else` block to select the animation sequence:
-        - `if (smoothed_score > config.fast_in)` -> play `fast` loop.
-        - `else if (smoothed_score > config.idle_floor)` -> play `normal` loop.
-        - `else` -> play `idle` loop.
-    d.  Tell the `SpritePlayer` to use the selected sequence, ignoring redundant `set_sequence` calls so loops are not restarted unnecessarily.
-    _Validation_: Manual run of the visualizer in "single panel mode" plus telemetry plots of raw vs. smoothed scores over a short clip. Confirm the Drummer sprite correctly switches between idle, normal, and fast animations without rapid flicker and that redundant sequence requests are filtered in logs.
+2.  **Instrument Heuristics Implementation**  
+    Implement the `InstrumentHeuristics` for the **Drummer** role. The `activity_score` method will be the primary output, translating audio features (like `bass_beat` and `treble_beat`) into a continuous `[0,1]` activity level.
+    _Validation_: A unit test feeds recorded features into the heuristic. Assert that the Drummer's `activity_score` is highest during percussion-heavy audio passages.
+
+3.  **Variable-Speed Playback**  
+    Implement the `SpritePlayer`. Its `update` method will accept the `activity_score`. The frame index will only advance if an internal accumulator, which is incremented by `(activity_score * delta_time)`, crosses a frame duration threshold. This makes the animation speed directly proportional to the activity score.
+    _Validation_: In a standalone test harness, manually pass in different `activity_score` values (e.g., 0.1, 0.5, 1.0) and verify that the animation playback speed changes fluidly.
+
+4.  **Simplified PanelController Prototype**  
+    Create the `PanelController` for the Drummer. In its `init` method, it will:
+    a.  Load the single animation sequence from the `assets/sprites/drummer/` directory.
+    b.  Pass this sequence to its internal `SpritePlayer`.
+    In its `update` loop, it will:
+    a.  Call `InstrumentHeuristics` to get the current `activity_score`.
+    b.  Pass this score directly to the `SpritePlayer::update` method.
+    _Validation_: Manual run of the visualizer in "single panel mode." The Drummer animation, composed of the 4 loaded frames, should be almost static during silence, play at a moderate speed during normal passages, and loop very quickly during intense drum fills. The motion is continuous and fluid.
 
 ## Phase 3 – Full Band Layout & Independent Animation
 
