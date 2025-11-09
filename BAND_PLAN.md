@@ -33,57 +33,79 @@ investing in subsequent work.
    configuration from the live `FeatureExtractor` settings so telemetry mirrors runtime
    behavior.
 
-## Phase 2 – Single Panel Prototype
-1. **Instrument heuristics implementation**  
-   Code `InstrumentHeuristics` and `InstrumentStateMachine` for one role (e.g., Drummer)
-   using thresholds from `BAND.md`.  
-   _Validation_: Feed recorded features into a deterministic test harness; assert state
-   transitions follow the expected timeline (idle → normal → fast).
-2. **PanelController skeleton**  
-   Create `PanelController` with init/update/render pipeline and integrate the single role.  
-   _Validation_: Manual run of the visualizer in “single panel mode”; confirm frame rate is
-   stable and debug overlay shows activity/spotlight scores.
+## Phase 2 – Direct-Drive Panel Prototype
 
-## Phase 3 – Full Band Layout & Spotlight
-1. **BandDirectorAnimation integration**  
-   Instantiate four `PanelController`s, compute the 2×2 layout, and manage per-panel planes.  
-   _Validation_: Render on minimum supported terminal size; ensure borders/titles fit and
-   there are no overlaps or clipping.
-2. **Spotlight orchestration**  
-   Implement beat-aligned spotlight policy with bar-length holds and priority rules.  
-   _Validation_: Use synthetic feature sequences to assert only one spotlight is active at
-   a time and that lock timers respect the configured minimum bars.
-3. **Zoom assets + transitions**  
-   Wire optional `spotlight_hi` sprite sets and plane translation for subtle motion.  
-   _Validation_: Manual check that spotlight entry/exit has no flicker and higher-resolution
-   assets line up with panel boundaries.
+**Goal:** Create a working, single-panel animation that directly maps audio features to sprite changes, without a formal state machine. This prioritizes immediate visual feedback.
 
-## Phase 4 – Configuration & Robustness
-1. **Configuration parsing**  
-   Extend `AppConfig` / `AnimationConfig` and `src/config.cpp` to read `[visual.band]` plus
-   per-member tables.  
-   _Validation_: Add unit tests that load fixture TOML files (complete, partial, malformed)
-   and confirm defaults or errors fire as documented.
-2. **Runtime toggles & degradation**  
-   Implement flags for spotlight enablement, border rendering, and fallback animation FPS
-   when frame budget is tight.  
-   _Validation_: Stress test by artificially reducing frame budget; ensure toggles kick in
-   and telemetry logs the mode change.
-3. **End-to-end acceptance run**  
-   Execute the full visualizer with real audio, verifying heuristics degrade gracefully
-   when chroma is disabled.  
-   _Validation_: QA checklist with screenshots/video captures for all four instruments in
-   idle/normal/fast/spotlight states.
+1.  **Instrument Heuristics Implementation**  
+    Code the `InstrumentHeuristics` for one role (e.g., Drummer). The `activity_score` method will be the primary output, directly translating audio features into a [0,1] activity level.
+    _Validation_: Feed recorded features into a deterministic test harness; assert that the `activity_score` for the Drummer role increases significantly in response to `bass_beat` and `treble_beat` flags.
 
-## Phase 5 – Polish & Knowledge Transfer
-1. **Documentation pass**  
-   Update `BAND.md`, `when.toml` comments, and inline code docs to reflect shipped behavior.  
-   _Validation_: Peer review sign-off plus lint/CI run with documentation build (if any).
-2. **Support tooling**  
-   Add developer shortcuts (hotkeys, debug overlays, logging toggles) to aid future tuning.  
-   _Validation_: Demonstrate the tooling in a walkthrough session recorded for the team wiki.
-3. **Post-launch monitoring hooks**  
-   Emit optional metrics (e.g., spotlight uptime, average FPS) to the existing telemetry
-   channel or logs.  
-   _Validation_: Confirm metrics appear during a 10-minute soak test and can be graphed via
-   the standard observability stack.
+2.  **Simplified PanelController**  
+    Create the `PanelController` but **without** the `InstrumentStateMachine`. Its `update` loop will:
+    a.  Call the `InstrumentHeuristics` to get the current `activity_score`.
+    b.  Use a simple `if/else if/else` block to select the animation sequence:
+        - `if (activity_score > config.fast_in)` -> play `fast` loop.
+        - `else if (activity_score > config.idle_floor)` -> play `normal` loop.
+        - `else` -> play `idle` loop.
+    c.  Tell the `SpritePlayer` to use the selected sequence.
+    _Validation_: Manual run of the visualizer in "single panel mode." Confirm the Drummer sprite correctly switches between idle, normal, and fast animations in response to the music's intensity.
+
+## Phase 3 – Full Band Layout & Independent Animation
+
+**Goal:** Display all four band members on screen, each animating independently based on their own heuristics.
+
+1.  **BandDirectorAnimation Integration**  
+    Implement the `BandDirectorAnimation` class. Its primary job is to instantiate four `PanelController`s (one for each role), compute the 2x2 panel layout, and create the `ncplane` for each panel.
+    _Validation_: On launch, all four panels appear with their titles and borders, each showing their respective character in the `idle` state. The layout adapts correctly to terminal resizing.
+
+2.  **Parallel Heuristics Update**  
+    In `BandDirectorAnimation::update`, iterate through all four `PanelController`s and call their individual `update` methods, passing in the global `FeatureView`. Each panel will run its own independent logic.
+    _Validation_: Manual run with music. All four members animate at the same time, but with different patterns. The Bassist should be more active during bass-heavy sections, the Drummer during percussive sections, etc. There is no spotlighting yet.
+
+## Phase 4 – Advanced State & Spotlight Orchestration
+
+**Goal:** Re-introduce state management to create more deliberate, less "flappy" animations and implement the coordinated spotlight feature.
+
+1.  **Implement `InstrumentStateMachine`**  
+    Now, build the `InstrumentStateMachine` as originally designed, complete with hysteresis timers (`idle_hold_sec`, `fast_hold_sec`). Refactor `PanelController` to use the state machine instead of the direct `if/else` logic. The FSM will now be responsible for deciding the `MemberState`.
+    _Validation_: Manual run. The animations should now feel more "sticky." A character entering the `fast` state will remain there for a minimum duration, even if the audio energy dips for a moment, preventing frantic switching.
+
+2.  **Spotlight Scoring & Orchestration**  
+    Implement the `spotlight_score` method in `InstrumentHeuristics`. In `BandDirectorAnimation`, implement the `manage_spotlight` policy. On each frame, it will:
+    a.  Check the `spotlight_score` from all four panels.
+    b.  If no one is in the spotlight, grant it to the panel with the highest score above a threshold, aligned to the next beat (`features.beat_phase`).
+    c.  If a panel is already in the spotlight, keep it there until its `spotlight_min_bars` duration has elapsed.
+    _Validation_: Use a debug overlay to print the spotlight scores for each member. Verify that only one member enters the spotlight at a time and that the lock is held for the correct duration.
+
+3.  **Zoom Assets & Transitions**  
+    Update `PanelController` to use the optional `spotlight_hi` sprite set when its state machine enters the `Spotlight` state.
+    _Validation_: Manual check that spotlight entry correctly triggers the switch to the higher-resolution asset.
+
+## Phase 5 – Configuration & Robustness
+
+1.  **Configuration Parsing**  
+    Extend `AppConfig` / `AnimationConfig` and `src/config.cpp` to read `[visual.band]` plus per-member tables from `when.toml`.
+    _Validation_: Add unit tests that load fixture TOML files (complete, partial, malformed) and confirm defaults or errors fire as documented.
+
+2.  **Runtime Toggles & Degradation**  
+    Implement flags for spotlight enablement, border rendering, and fallback animation FPS when frame budget is tight.
+    _Validation_: Stress test by artificially reducing frame budget; ensure toggles kick in and telemetry logs the mode change.
+
+3.  **End-to-end Acceptance Run**  
+    Execute the full visualizer with real audio, verifying heuristics degrade gracefully when chroma is disabled.
+    _Validation_: QA checklist with screenshots/video captures for all four instruments in all states.
+
+## Phase 6 – Polish & Knowledge Transfer
+
+1.  **Documentation Pass**  
+    Update `BAND.md`, `when.toml` comments, and inline code docs to reflect shipped behavior.
+    _Validation_: Peer review sign-off plus lint/CI run with documentation build (if any).
+
+2.  **Support Tooling**  
+    Add developer shortcuts (hotkeys, debug overlays, logging toggles) to aid future tuning.
+    _Validation_: Demonstrate the tooling in a walkthrough session recorded for the team wiki.
+
+3.  **Post-launch Monitoring Hooks**  
+    Emit optional metrics (e.g., spotlight uptime, average FPS) to the existing telemetry channel or logs.
+    _Validation_: Confirm metrics appear during a 10-minute soak test and can be graphed via the standard observability stack.
