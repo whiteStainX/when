@@ -19,6 +19,16 @@ struct SpriteFrame {
     bool empty() const { return rows.empty(); }
 };
 
+struct SpriteSequence {
+    std::vector<SpriteFrame> frames;
+
+    bool empty() const { return frames.empty(); }
+    std::size_t size() const { return frames.size(); }
+    const SpriteFrame& at(std::size_t index) const { return frames.at(index); }
+    const SpriteFrame& front() const { return frames.front(); }
+    const SpriteFrame& back() const { return frames.back(); }
+};
+
 struct SpriteSet {
     std::vector<SpriteFrame> idle;
     std::vector<SpriteFrame> normal;
@@ -33,7 +43,8 @@ class SpritePlayer {
 public:
     SpritePlayer() = default;
 
-    void set_sequence(const std::vector<SpriteFrame>* sequence);
+    void set_sequence(const SpriteSequence* sequence);
+    void set_sequence(const std::vector<SpriteFrame>* sequence); // compatibility shim
     void set_fps(float fps);
     void set_phase_lock(bool enabled);
 
@@ -41,10 +52,11 @@ public:
     void update(float delta_seconds, float beat_phase, float bar_phase);
 
     const SpriteFrame& current() const;
-    bool has_sequence() const { return sequence_ && !sequence_->empty(); }
+    bool has_sequence() const { return sequence_frames_ && !sequence_frames_->empty(); }
 
 private:
-    const std::vector<SpriteFrame>* sequence_ = nullptr;
+    const SpriteSequence* sequence_container_ = nullptr;
+    const std::vector<SpriteFrame>* sequence_frames_ = nullptr;
     float fps_ = 6.0f;
     float accumulator_ = 0.0f;
     std::size_t index_ = 0;
@@ -61,6 +73,7 @@ struct SpriteFileSet {
 };
 
 std::vector<SpriteFrame> load_sprite_frames_from_file(const std::filesystem::path& path);
+SpriteSequence load_sprite_sequence_from_file(const std::filesystem::path& path);
 SpriteSet load_sprite_set(const std::filesystem::path& root, const SpriteFileSet& files);
 
 } // namespace band

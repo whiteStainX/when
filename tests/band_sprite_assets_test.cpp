@@ -10,6 +10,8 @@ namespace fs = std::filesystem;
 
 int main() {
     using when::animations::band::SpriteFileSet;
+    using when::animations::band::SpriteSequence;
+    using when::animations::band::load_sprite_sequence_from_file;
     using when::animations::band::load_sprite_set;
 
     const fs::path sprites_root{"assets/sprites"};
@@ -29,6 +31,21 @@ int main() {
         const fs::path member_root = sprites_root / member;
         assert(fs::exists(member_root) && fs::is_directory(member_root));
 
+        auto ensure_sequence = [&](const fs::path& relative_path) {
+            try {
+                SpriteSequence sequence = load_sprite_sequence_from_file(member_root / relative_path);
+                assert(!sequence.empty() && "Sprite sequence must not be empty");
+            } catch (...) {
+                assert(false && "Sprite sequence failed to load; see logs for details");
+            }
+        };
+
+        ensure_sequence(required_files.idle);
+        ensure_sequence(required_files.normal);
+        ensure_sequence(required_files.fast);
+        ensure_sequence(required_files.spotlight);
+
+        // Legacy shim: continue verifying the state-based loader until full migration
         when::animations::band::SpriteSet set;
         try {
             set = load_sprite_set(member_root, required_files);

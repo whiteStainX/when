@@ -49,8 +49,15 @@ bool SpriteSet::has_any_frames() const {
     return !idle.empty() || !normal.empty() || !fast.empty() || !spotlight.empty() || !spotlight_hi.empty();
 }
 
+void SpritePlayer::set_sequence(const SpriteSequence* sequence) {
+    sequence_container_ = sequence;
+    sequence_frames_ = sequence ? &sequence->frames : nullptr;
+    reset();
+}
+
 void SpritePlayer::set_sequence(const std::vector<SpriteFrame>* sequence) {
-    sequence_ = sequence;
+    sequence_container_ = nullptr;
+    sequence_frames_ = sequence;
     reset();
 }
 
@@ -69,7 +76,7 @@ void SpritePlayer::reset() {
 }
 
 void SpritePlayer::update(float delta_seconds, float beat_phase, float /*bar_phase*/) {
-    if (!sequence_ || sequence_->empty()) {
+    if (!sequence_frames_ || sequence_frames_->empty()) {
         return;
     }
 
@@ -77,7 +84,7 @@ void SpritePlayer::update(float delta_seconds, float beat_phase, float /*bar_pha
         float wrapped_phase = std::clamp(beat_phase, 0.0f, 1.0f);
         if (wrapped_phase < last_beat_phase_ - 0.5f) {
             // wrap detected
-            index_ = (index_ + 1) % sequence_->size();
+            index_ = (index_ + 1) % sequence_frames_->size();
         }
         last_beat_phase_ = wrapped_phase;
         return;
@@ -91,15 +98,15 @@ void SpritePlayer::update(float delta_seconds, float beat_phase, float /*bar_pha
     const float frame_duration = 1.0f / fps_;
     while (accumulator_ >= frame_duration) {
         accumulator_ -= frame_duration;
-        index_ = (index_ + 1) % sequence_->size();
+        index_ = (index_ + 1) % sequence_frames_->size();
     }
 }
 
 const SpriteFrame& SpritePlayer::current() const {
-    if (!sequence_ || sequence_->empty()) {
+    if (!sequence_frames_ || sequence_frames_->empty()) {
         throw std::runtime_error("SpritePlayer has no active sequence");
     }
-    return sequence_->at(index_);
+    return sequence_frames_->at(index_);
 }
 
 std::vector<SpriteFrame> load_sprite_frames_from_file(const std::filesystem::path& path) {
@@ -150,6 +157,12 @@ std::vector<SpriteFrame> load_sprite_frames_from_file(const std::filesystem::pat
     }
 
     return frames;
+}
+
+SpriteSequence load_sprite_sequence_from_file(const std::filesystem::path& path) {
+    SpriteSequence sequence;
+    sequence.frames = load_sprite_frames_from_file(path);
+    return sequence;
 }
 
 SpriteSet load_sprite_set(const std::filesystem::path& root, const SpriteFileSet& files) {
