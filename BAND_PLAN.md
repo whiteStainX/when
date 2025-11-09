@@ -37,35 +37,36 @@ investing in subsequent work.
 
 **Goal:** Create a working, single-panel animation that directly maps audio features to sprite changes, without a formal state machine. This prioritizes immediate visual feedback.
 
-1.  **Instrument Heuristics Implementation**  
-    Code the `InstrumentHeuristics` for one role (e.g., Drummer). The `activity_score` method will be the primary output, directly translating audio features into a [0,1] activity level.
-    _Validation_: Feed recorded features into a deterministic test harness; assert that the `activity_score` for the Drummer role increases significantly in response to `bass_beat` and `treble_beat` flags.
+1.  **Instrument Heuristics Implementation**
+    Implement the full `InstrumentHeuristics` table for **all four roles** (Drummer, Bassist, Guitarist, Vocalist) using the cues documented in `BAND.md` (beat flags for percussion, sustained low-end energy for bass, mid/high dynamics for guitar, and melodic dominance for vocals). Each heuristic produces two primary outputs: an `activity_score` in `[0,1]` and a `spotlight_score` placeholder that currently mirrors `activity_score` so Phase 3 has a stable API.
+    _Validation_: Extend the deterministic test harness to load captured `FeatureView` fixtures representing percussion-heavy, bass-heavy, guitar-featured, and vocal-featured passages. Assert that each role's `activity_score` is highest during its featured passage and remains below `config.idle_floor` in unrelated sections. Add regression fixtures to CI so future tuning keeps the relative ordering intact.
 
-2.  **Simplified PanelController**  
+2.  **Simplified PanelController**
     Create the `PanelController` but **without** the `InstrumentStateMachine`. Its `update` loop will:
     a.  Call the `InstrumentHeuristics` to get the current `activity_score`.
-    b.  Use a simple `if/else if/else` block to select the animation sequence:
-        - `if (activity_score > config.fast_in)` -> play `fast` loop.
-        - `else if (activity_score > config.idle_floor)` -> play `normal` loop.
+    b.  Apply a minimal smoothing pass to the raw score (e.g., exponential moving average or short hold timer) so brief spikes do not thrash between loops. Persist the smoothed value per panel.
+    c.  Use a simple `if/else if/else` block to select the animation sequence:
+        - `if (smoothed_score > config.fast_in)` -> play `fast` loop.
+        - `else if (smoothed_score > config.idle_floor)` -> play `normal` loop.
         - `else` -> play `idle` loop.
-    c.  Tell the `SpritePlayer` to use the selected sequence.
-    _Validation_: Manual run of the visualizer in "single panel mode." Confirm the Drummer sprite correctly switches between idle, normal, and fast animations in response to the music's intensity.
+    d.  Tell the `SpritePlayer` to use the selected sequence, ignoring redundant `set_sequence` calls so loops are not restarted unnecessarily.
+    _Validation_: Manual run of the visualizer in "single panel mode" plus telemetry plots of raw vs. smoothed scores over a short clip. Confirm the Drummer sprite correctly switches between idle, normal, and fast animations without rapid flicker and that redundant sequence requests are filtered in logs.
 
 ## Phase 3 – Full Band Layout & Independent Animation
 
 **Goal:** Display all four band members on screen, each animating independently based on their own heuristics.
 
-1.  **BandDirectorAnimation Integration**  
-    Implement the `BandDirectorAnimation` class. Its primary job is to instantiate four `PanelController`s (one for each role), compute the 2x2 panel layout, and create the `ncplane` for each panel.
+1.  **BandDirectorAnimation Integration**
+    Implement the `BandDirectorAnimation` class. Its primary job is to instantiate four `PanelController`s (one for each role using the Phase 2 heuristics), compute the 2x2 panel layout, and create the `ncplane` for each panel.
     _Validation_: On launch, all four panels appear with their titles and borders, each showing their respective character in the `idle` state. The layout adapts correctly to terminal resizing.
 
 2.  **Parallel Heuristics Update**  
     In `BandDirectorAnimation::update`, iterate through all four `PanelController`s and call their individual `update` methods, passing in the global `FeatureView`. Each panel will run its own independent logic.
     _Validation_: Manual run with music. All four members animate at the same time, but with different patterns. The Bassist should be more active during bass-heavy sections, the Drummer during percussive sections, etc. There is no spotlighting yet.
 
-## Phase 4 – Advanced State & Spotlight Orchestration
+## Phase 4 – Advanced State & Spotlight Orchestration *(Optional Follow-up)*
 
-**Goal:** Re-introduce state management to create more deliberate, less "flappy" animations and implement the coordinated spotlight feature.
+**Goal:** Re-introduce state management to create more deliberate, less "flappy" animations and implement the coordinated spotlight feature. This phase becomes a stretch objective if the stateless smoothing from Phase 2 already yields satisfactory responsiveness.
 
 1.  **Implement `InstrumentStateMachine`**  
     Now, build the `InstrumentStateMachine` as originally designed, complete with hysteresis timers (`idle_hold_sec`, `fast_hold_sec`). Refactor `PanelController` to use the state machine instead of the direct `if/else` logic. The FSM will now be responsible for deciding the `MemberState`.
