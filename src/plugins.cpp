@@ -107,10 +107,13 @@ class BandFeatureTapLogger final : public Plugin {
 public:
     std::string id() const override { return "band-feature-tap-logger"; }
 
+    void configure_feature_extractor(const when::FeatureExtractor::Config& feature_config) override {
+        tap_config_ = when::animations::band::feature_tap_config_from(feature_config);
+    }
+
     void on_load(const AppConfig& config) override {
         enabled_ = config.runtime.band_feature_logging;
         duration_limit_s_ = std::max(0.0, config.runtime.band_feature_logging_duration_s);
-        tap_config_ = when::animations::band::feature_tap_config_from(when::FeatureExtractor::Config{});
 
         if (!enabled_) {
             std::clog << "[plugin] band-feature-tap-logger disabled" << std::endl;
@@ -253,7 +256,8 @@ private:
     double duration_limit_s_ = 0.0;
     std::ofstream log_;
     std::string log_path_;
-    when::animations::band::FeatureTapConfig tap_config_{};
+    when::animations::band::FeatureTapConfig tap_config_ =
+        when::animations::band::feature_tap_config_from(when::FeatureExtractor::Config{});
 };
 
 } // namespace
@@ -262,7 +266,8 @@ void PluginManager::register_factory(const std::string& id, PluginFactory factor
     factories_[id] = std::move(factory);
 }
 
-void PluginManager::load_from_config(const AppConfig& config) {
+void PluginManager::load_from_config(const AppConfig& config,
+                                     const when::FeatureExtractor::Config& feature_config) {
     warnings_.clear();
     active_.clear();
     if (config.plugins.safe_mode) {
@@ -287,6 +292,7 @@ void PluginManager::load_from_config(const AppConfig& config) {
             warnings_.push_back("Factory for plugin '" + id + "' returned null");
             continue;
         }
+        plugin->configure_feature_extractor(feature_config);
         plugin->on_load(config);
         active_.push_back(std::move(plugin));
     }
