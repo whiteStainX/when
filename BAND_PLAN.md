@@ -5,8 +5,9 @@ explicit validation criteria so we can halt, adjust thresholds, or reprioritize 
 investing in subsequent work.
 
 ## Phase 0 – Foundations & Asset Loader
-1. **Sprite container types**  
-   Implement `SpriteFrame`, `SpriteSet`, and `SpritePlayer` plus serialization helpers.  
+1. **Sprite container types**
+   Implement `SpriteFrame`, `SpriteSet`, and `SpritePlayer` plus serialization helpers tied to the
+   legacy state-driven asset layout.
    _Validation_: Unit-test the loader with representative sprite files (idle/normal/fast)
    ensuring width/height consistency checks fire on malformed assets.
 2. **Standalone render harness**  
@@ -14,8 +15,9 @@ investing in subsequent work.
    target FPS, and blits onto a dedicated `ncplane`.  
    _Validation_: Capture a 30-second terminal session to confirm UTF-8 glyphs and timing
    remain stable; verify via CI artifact or manual review.
-3. **Assets staging**  
-   Establish `assets/sprites/<member>/<state>.txt` layout with placeholder art.  
+3. **Assets staging**
+   Establish `assets/sprites/<member>/<state>.txt` layout with placeholder art, covering the
+   legacy `SpriteSet` contract that Phase 1.5 will retire.
    _Validation_: `band_sprite_assets_test` enumerates `assets/sprites/<member>` directories,
    loading each required state file and failing CI if any asset is missing or empty.
 
@@ -33,21 +35,58 @@ investing in subsequent work.
    configuration from the live `FeatureExtractor` settings so telemetry mirrors runtime
    behavior.
 
+## Phase 1.5 – Sequence-Based Asset Migration
+1. **Introduce `SpriteSequence` containers**
+   Replace `SpriteSet` usage in the loader and tests with a sequence-oriented container that
+   models a loop of frames without `MemberState` indirection. Update serialization helpers to
+   output `std::vector<SpriteFrame>` instances and keep compatibility shims where necessary so
+   existing callers can migrate incrementally.
+   _Validation_: Loader unit tests cover both the legacy `SpriteSet` path and the new
+   `SpriteSequence` path. Legacy coverage can be marked deprecated but must stay green until the
+   migration finishes.
+2. **Directory-based loader update**
+   Teach the loader to read from `assets/sprites/<member>/<frame>.txt`, sorting filenames
+   alphabetically into a `SpriteSequence`. Maintain the legacy layout behind a feature flag or
+   compile-time toggle until all consumers switch over.
+   _Validation_: Fixture assets exist for both layouts, and tests assert the correct frame counts
+   and ordering for each. CI fails if either layout regresses while the migration flag is enabled.
+3. **Migration readiness review**
+   Add documentation or inline notes explaining the cut-over plan, including which modules still
+   depend on the stateful loader. Explicitly call out when it is safe to delete the legacy path so
+   Phase 2 work can assume the sequence-only world.
+   _Validation_: Design review sign-off confirming no runtime path still requires the stateful
+   layout.
+
 ## Phase 2 – Direct-Drive Speed Control Prototype
 
-**Goal:** Create a working, single-panel animation that loads a sequence of sprite files from a directory and directly maps audio features to the sequence's playback speed.
+**Goal:** Create a working, single-panel animation that loads a `SpriteSequence` of per-frame
+sprite files from a directory and directly maps audio features to the sequence's playback speed.
 
-1.  **Asset Loading for a Single Sequence**  
-    Update the asset loading logic (`SpriteSet` or a new `SpriteLoader` class). It must now be able to take a directory path (e.g., `assets/sprites/drummer/`) and treat **each `.txt` file within it as a single frame**. The loader will read all `.txt` files, sorted alphabetically, into one `std::vector<SpriteFrame>` that represents the complete, looping animation for that character.
-    _Validation_: A unit test (`band_sprite_loader_test.cpp`) confirms that loading the `assets/sprites/drummer/` directory results in a vector containing exactly 4 `SpriteFrame` objects, with the content of each matching the respective `.txt` file.
+1.  **Asset Loading for a Single Sequence**
+    Consume the `SpriteSequence` emitted by Phase 1.5. When given a directory path (e.g.,
+    `assets/sprites/drummer/`), the loader must treat **each `.txt` file within it as a single
+    frame**, sort the files alphabetically, and return the ordered `SpriteSequence` that loops for
+    that character.
+    _Validation_: A unit test (`band_sprite_loader_test.cpp`) confirms that loading the
+    `assets/sprites/drummer/` directory results in a `SpriteSequence` containing exactly 4
+    `SpriteFrame` objects, with the content of each matching the respective `.txt` file.
 
 2.  **Instrument Heuristics Implementation**  
     Implement the `InstrumentHeuristics` for the **Drummer** role. The `activity_score` method will be the primary output, translating audio features (like `bass_beat` and `treble_beat`) into a continuous `[0,1]` activity level.
     _Validation_: A unit test feeds recorded features into the heuristic. Assert that the Drummer's `activity_score` is highest during percussion-heavy audio passages.
 
-3.  **Variable-Speed Playback**  
-    Implement the `SpritePlayer`. Its `update` method will accept the `activity_score`. The frame index will only advance if an internal accumulator, which is incremented by `(activity_score * delta_time)`, crosses a frame duration threshold. This makes the animation speed directly proportional to the activity score.
-    _Validation_: In a standalone test harness, manually pass in different `activity_score` values (e.g., 0.1, 0.5, 1.0) and verify that the animation playback speed changes fluidly.
+3.  **Variable-Speed Playback**
+    Implement the `SpritePlayer`. Its `update` method accepts the `activity_score` and computes the
+    instantaneous frame cadence via linear interpolation: `current_fps = lerp(min_fps, max_fps,
+    activity_score)`. Increment an internal accumulator by `delta_time`, and when the accumulator
+    exceeds `threshold = 1 / current_fps`, advance the frame and subtract the threshold. This keeps
+    the animation speed directly proportional to the activity score while clamping it between
+    `min_fps` and `max_fps`.
+    _Validation_: In a standalone test harness, pass in `activity_score` values of 0.0, 0.5, and 1.0
+    over a fixed 10-second run. Assert that the player produces `floor(min_fps * 10)`,
+    `floor(lerp(min_fps, max_fps, 0.5) * 10)`, and `floor(max_fps * 10)` frame advances,
+    respectively. Expose default `min_fps` and `max_fps` via configuration hooks so Phase 5 can wire
+    them through the user-facing config.
 
 4.  **Simplified PanelController Prototype**  
     Create the `PanelController` for the Drummer. In its `init` method, it will:
