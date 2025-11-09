@@ -8,6 +8,7 @@
 
 #include "audio_engine.h"
 #include "audio/audio_features.h"
+#include "audio/feature_extractor.h"
 #include "config.h"
 
 namespace when {
@@ -16,6 +17,7 @@ class Plugin {
 public:
     virtual ~Plugin() = default;
     virtual std::string id() const = 0;
+    virtual void configure_feature_extractor(const when::FeatureExtractor::Config&) {}
     virtual void on_load(const AppConfig& config) = 0;
     virtual void on_frame(const AudioMetrics& metrics,
                           const AudioFeatures& features,
@@ -27,7 +29,7 @@ using PluginFactory = std::function<std::unique_ptr<Plugin>()>;
 class PluginManager {
 public:
     void register_factory(const std::string& id, PluginFactory factory);
-    void load_from_config(const AppConfig& config);
+    void load_from_config(const AppConfig& config, const when::FeatureExtractor::Config& feature_config);
     void notify_frame(const AudioMetrics& metrics,
                       const AudioFeatures& features,
                       double time_s);

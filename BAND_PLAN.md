@@ -16,8 +16,8 @@ investing in subsequent work.
    remain stable; verify via CI artifact or manual review.
 3. **Assets staging**  
    Establish `assets/sprites/<member>/<state>.txt` layout with placeholder art.  
-   _Validation_: Loader integration test enumerates the directory tree and reports missing
-   states; CI must pass with at least idle/normal sequences per member.
+   _Validation_: `band_sprite_assets_test` enumerates `assets/sprites/<member>` directories,
+   loading each required state file and failing CI if any asset is missing or empty.
 
 ## Phase 1 – Instrument Feature Taps
 1. **FeatureView assembly**  
@@ -27,9 +27,11 @@ investing in subsequent work.
    matches expected low/mid/high buckets and chroma dominance stays within [0,1].
 2. **Telemetry capture**  
    Extend the existing logging or add a developer command to dump `FeatureView` values for
-   short clips.  
+   short clips.
    _Validation_: Run a known track through the analyzer and inspect the CSV/log output for
-   believable ranges (no NaNs/inf); sign off before wiring heuristics.
+   believable ranges (no NaNs/inf); the `band-feature-tap-logger` now derives its tap
+   configuration from the live `FeatureExtractor` settings so telemetry mirrors runtime
+   behavior.
 
 ## Phase 2 – Single Panel Prototype
 1. **Instrument heuristics implementation**  

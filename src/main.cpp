@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
 
     when::PluginManager plugin_manager;
     when::register_builtin_plugins(plugin_manager);
-    plugin_manager.load_from_config(config);
+    plugin_manager.load_from_config(config, feature_config);
     for (const std::string& warning : plugin_manager.warnings()) {
         std::cerr << "[plugin] " << warning << std::endl;
     }
