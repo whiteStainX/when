@@ -72,10 +72,9 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
     const auto smoothed_from_dsp = input_frame.smoothed_band_energies;
 
     std::span<const float> bands;
-    const bool can_apply_weighting =
-        !fft_bins.empty() && !band_ranges.empty() && input_frame.sample_rate > 0.0f;
+    const bool can_use_fft_bins = !fft_bins.empty() && !band_ranges.empty() && input_frame.sample_rate > 0.0f;
 
-    if (can_apply_weighting) {
+    if (can_use_fft_bins) {
         const std::size_t band_count = band_ranges.size();
         if (band_count_ != band_count) {
             prepare(band_count);
@@ -193,7 +192,7 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
 
     if (config_.enable_spectral_flatness) {
         std::span<const float> flatness_bins;
-        if (can_apply_weighting && !weighted_bins_.empty()) {
+        if (can_use_fft_bins && !weighted_bins_.empty()) {
             flatness_bins = std::span<const float>(weighted_bins_.data(), weighted_bins_.size());
         } else if (!fft_bins.empty()) {
             flatness_bins = fft_bins;
@@ -226,7 +225,7 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
         features.spectral_flatness = 0.0f;
     }
 
-    if (config_.enable_chroma && can_apply_weighting && !weighted_bins_.empty()) {
+    if (config_.enable_chroma && can_use_fft_bins && !weighted_bins_.empty()) {
         update_chroma_mapping(weighted_bins_.size(), input_frame.sample_rate, (weighted_bins_.size() > 0) ? (weighted_bins_.size() - 1) * 2 : 0);
 
         std::array<float, 12> chroma_accumulator{};
@@ -333,6 +332,17 @@ void FeatureExtractor::update_weighting_curve(std::size_t fft_bin_count,
                                               std::size_t fft_size) {
     if (fft_bin_count == 0 || sample_rate <= 0.0f || fft_size == 0) {
         weighting_curve_.assign(fft_bin_count, 1.0f);
+        weighting_sample_rate_ = sample_rate;
+        weighting_fft_size_ = fft_size;
+        return;
+    }
+
+    if (!config_.apply_a_weighting) {
+        if (weighting_curve_.size() != fft_bin_count) {
+            weighting_curve_.assign(fft_bin_count, 1.0f);
+        } else {
+            std::fill(weighting_curve_.begin(), weighting_curve_.end(), 1.0f);
+        }
         weighting_sample_rate_ = sample_rate;
         weighting_fft_size_ = fft_size;
         return;

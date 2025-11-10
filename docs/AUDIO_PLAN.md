@@ -43,6 +43,7 @@ This document provides a detailed, phased implementation plan for the audio engi
     2.  When processing a frame, multiply the raw FFT magnitudes supplied via `FeatureInputFrame` by the weighting curve before any band aggregation.
     3.  Aggregate the weighted bins into bass/mid/treble energies (reuse existing band mappings) so the perceptual bias is baked in before envelopes or normalization are applied.
     4.  Cache the weighted magnitudes if later Tier 3 features (flatness, chroma) need them without recomputing.
+    5.  Expose a configuration toggle (e.g., `dsp.apply_a_weighting`) so installations that favour raw spectra can disable the perceptual curve without recompiling.
 
 ### Step 1.2: Implement Attack/Release Envelopes
 

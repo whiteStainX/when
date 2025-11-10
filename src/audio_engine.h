@@ -80,6 +80,7 @@ private:
     bool decoder_initialized_;
     ma_uint32 decoder_channels_;
     ma_uint32 decoder_sample_rate_;
+    ma_uint32 file_stream_channels_;
 
     ma_resampler resampler_{};
     bool resampler_initialized_;

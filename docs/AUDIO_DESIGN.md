@@ -29,9 +29,9 @@ single reference.
 
 ## FeatureExtractor Responsibilities
 
-The extractor applies A-weighting to approximate human loudness perception,
-then derives a variety of tiered analyses. Each group can drive different kinds
-of visuals:
+By default the extractor applies A-weighting (configurable via
+`dsp.apply_a_weighting`) to approximate human loudness perception, then derives a
+variety of tiered analyses. Each group can drive different kinds of visuals:
 
 ### Tier 0 – Core Energies
 
@@ -72,6 +72,7 @@ of visuals:
 | `dsp.smoothing_attack`, `dsp.smoothing_release` | Global attack/release
   constants for all band envelopes. They define how quickly smoothed energies
   chase instantaneous changes. |
+| `dsp.apply_a_weighting` | Enables perceptual weighting of FFT bins before band aggregation. |
 | `dsp.enable_spectral_flatness` | Enables Tier-2 spectral-shape analysis. |
 | `dsp.enable_chroma` | Enables Tier-3 chroma analysis. |
 

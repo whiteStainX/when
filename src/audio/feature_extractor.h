@@ -37,6 +37,7 @@ public:
         float tempo_confidence_threshold = 1e-4f;
         float beat_phase_realign = 0.25f;
         std::size_t beats_per_bar = 4;
+        bool apply_a_weighting = true;
         bool enable_spectral_flatness = true;
         bool enable_chroma = true;
         float chroma_min_frequency = 32.703f;  // C1
