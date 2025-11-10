@@ -255,6 +255,11 @@ std::optional<AnimationConfig> parse_animation_config(
                       anim_config.space_rock_size_interp_rate);
     }
 
+    const auto space_rock_max_jitter_it = raw_anim_config.find("space_rock_max_jitter");
+    if (space_rock_max_jitter_it != raw_anim_config.end()) {
+        parse_float32(space_rock_max_jitter_it->second.value, anim_config.space_rock_max_jitter);
+    }
+
     const auto rain_angle_it = raw_anim_config.find("rain_angle_degrees");
     if (rain_angle_it != raw_anim_config.end()) {
         parse_float32(rain_angle_it->second.value, anim_config.rain_angle_degrees);
