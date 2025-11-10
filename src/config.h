@@ -106,6 +106,7 @@ struct AnimationConfig {
     float space_rock_mid_beat_size_multiplier = 1.35f; // Size multiplier applied on mid-beat hits
     float space_rock_size_interp_rate = 4.0f;      // Interpolation rate for breathing towards envelope size
     float space_rock_max_jitter = 0.6f;            // Maximum normalized jitter velocity applied per second
+    float space_rock_position_interp_rate = 6.0f;  // Interpolation rate driving tempo-synced translation
     float rain_angle_degrees = 0.0f;     // Angle for cyber rain drops (degrees, relative to vertical)
     float wave_speed_cols_per_s = 40.0f; // Sweep speed for lightning wave animations
     int wave_front_width_cols = 2;       // Width of the solid lightning front in columns

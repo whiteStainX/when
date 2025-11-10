@@ -15,10 +15,10 @@ public:
     struct Square {
         float x = 0.0f;
         float y = 0.0f;
+        float target_x = 0.0f;
+        float target_y = 0.0f;
         float size = 0.0f;
         float target_size = 0.0f;
-        float velocity_x = 0.0f;
-        float velocity_y = 0.0f;
         float age = 0.0f;
         float lifespan = 0.0f;
     };
@@ -54,6 +54,7 @@ private:
         float mid_beat_size_multiplier = 1.35f;
         float size_interp_rate = 4.0f;
         float max_jitter = 0.6f;
+        float position_interp_rate = 6.0f;
     };
 
     void load_parameters_from_config(const AppConfig& config);
@@ -77,6 +78,7 @@ private:
     std::vector<Square> squares_;
     Parameters params_{};
     std::mt19937 rng_;
+    bool was_beat_detected_ = false;
 };
 
 } // namespace animations

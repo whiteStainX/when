@@ -66,6 +66,7 @@ void SpaceRockAnimation::init(notcurses* nc, const AppConfig& config) {
     plane_rows_ = 0;
     plane_cols_ = 0;
     squares_.clear();
+    was_beat_detected_ = false;
 
     create_or_resize_plane(nc, config);
 }
@@ -83,11 +84,37 @@ void SpaceRockAnimation::update(float delta_time,
     const float target_size = compute_target_size_from_envelope(features.mid_envelope);
     const float jitter_magnitude =
         std::max(features.treble_energy, 0.0f) * std::max(params_.max_jitter, 0.0f);
-    std::uniform_real_distribution<float> jitter_distribution(-jitter_magnitude, jitter_magnitude);
+    const bool beat_triggered = features.beat_detected && !was_beat_detected_;
+    was_beat_detected_ = features.beat_detected;
 
     if (!squares_.empty()) {
         const float interpolation_rate = std::max(params_.size_interp_rate, 0.0f);
         const float interpolation_step = std::clamp(interpolation_rate * dt, 0.0f, 1.0f);
+        const float beat_phase = clamp01(features.beat_phase);
+        const float position_rate = std::max(params_.position_interp_rate, 0.0f);
+        const float position_step_base = std::clamp(position_rate * dt, 0.0f, 1.0f);
+        const float position_step = std::clamp(std::max(position_step_base, beat_phase), 0.0f, 1.0f);
+
+        if (beat_triggered) {
+            std::uniform_real_distribution<float> zero_to_one(0.0f, 1.0f);
+            std::uniform_real_distribution<float> jitter_distribution(-jitter_magnitude, jitter_magnitude);
+            const float centroid_bias = clamp01(features.spectral_centroid);
+
+            for (auto& square : squares_) {
+                const float random_x = zero_to_one(rng_);
+                const float top_position = zero_to_one(rng_) * 0.5f;
+                const float bottom_position = 0.5f + zero_to_one(rng_) * 0.5f;
+                const float biased_y = clamp01(centroid_bias * top_position +
+                                               (1.0f - centroid_bias) * bottom_position);
+
+                const float jitter_offset_x = jitter_magnitude > 0.0f ? jitter_distribution(rng_) : 0.0f;
+                const float jitter_offset_y = jitter_magnitude > 0.0f ? jitter_distribution(rng_) : 0.0f;
+
+                square.target_x = clamp01(random_x + jitter_offset_x);
+                square.target_y = clamp01(biased_y + jitter_offset_y);
+            }
+        }
+
         for (auto& square : squares_) {
             square.age += dt * params_.square_decay_rate;
             square.target_size = target_size;
@@ -98,16 +125,16 @@ void SpaceRockAnimation::update(float delta_time,
             }
             square.size = std::clamp(square.size, params_.min_size, params_.max_size);
 
-            if (jitter_magnitude > 0.0f && dt > 0.0f) {
-                square.velocity_x = jitter_distribution(rng_);
-                square.velocity_y = jitter_distribution(rng_);
-            } else {
-                square.velocity_x = 0.0f;
-                square.velocity_y = 0.0f;
+            if (position_step >= 1.0f) {
+                square.x = square.target_x;
+                square.y = square.target_y;
+            } else if (position_step > 0.0f) {
+                square.x += (square.target_x - square.x) * position_step;
+                square.y += (square.target_y - square.y) * position_step;
             }
 
-            square.x = clamp01(square.x + square.velocity_x * dt);
-            square.y = clamp01(square.y + square.velocity_y * dt);
+            square.x = clamp01(square.x);
+            square.y = clamp01(square.y);
         }
 
         squares_.erase(std::remove_if(squares_.begin(),
@@ -195,10 +222,12 @@ void SpaceRockAnimation::render(notcurses* /*nc*/) {
 
 void SpaceRockAnimation::activate() {
     is_active_ = true;
+    was_beat_detected_ = false;
 }
 
 void SpaceRockAnimation::deactivate() {
     is_active_ = false;
+    was_beat_detected_ = false;
     if (plane_) {
         ncplane_erase(plane_);
     }
@@ -229,6 +258,8 @@ void SpaceRockAnimation::load_parameters_from_config(const AppConfig& config) {
             std::max(0.0f, anim_config.space_rock_mid_beat_size_multiplier);
         params_.size_interp_rate = std::max(0.0f, anim_config.space_rock_size_interp_rate);
         params_.max_jitter = std::max(0.0f, anim_config.space_rock_max_jitter);
+        params_.position_interp_rate =
+            std::max(0.0f, anim_config.space_rock_position_interp_rate);
         break;
     }
 }
@@ -358,6 +389,8 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
         const float bottom_position = 0.5f + distribution(rng_) * 0.5f;
         square.y = clamp01(centroid_bias * top_position +
                            (1.0f - centroid_bias) * bottom_position);
+        square.target_x = square.x;
+        square.target_y = square.y;
         square.size = spawn_size;
         square.target_size = spawn_size;
         square.age = 0.0f;
