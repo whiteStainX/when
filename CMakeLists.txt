@@ -28,6 +28,7 @@ set(WHEN_SOURCES
   src/audio/feature_extractor.cpp
   src/dsp.cpp
   src/animations/ascii_matrix_animation.cpp
+  src/animations/space_rock_animation.cpp
   src/animations/pleasure_animation.cpp
   src/animations/animation_manager.cpp
   src/animations/glyph_utils.cpp

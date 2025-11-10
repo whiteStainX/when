@@ -56,9 +56,14 @@ matrix_beat_boost = 2.0
 matrix_beat_threshold = 0.55
 
 [[animations]]
-type = "Pleasure"
+type = "SpaceRock"
 z_index = 3
 initially_active = true
+
+[[animations]]
+type = "Pleasure"
+z_index = 3
+initially_active = false
 plane_rows = 24
 plane_cols = 48
 pleasure_magnitude_scale = 0.1
