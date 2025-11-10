@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <chrono>
+#include <cstdint>
 #include <random>
-#include <string>
 
 #include "animation_event_utils.h"
 
@@ -13,6 +13,9 @@ namespace animations {
 namespace {
 constexpr float kFrameFillRatio = 0.8f;
 constexpr float kMillisecondsToSeconds = 0.001f;
+// Approximate width-to-height ratio of a terminal cell so rendered geometry can remain
+// visually square even though cells are taller than they are wide.
+constexpr float kCellWidthToHeightRatio = 0.5f;
 
 int compute_spawn_count(int base_count, float strength_scale, float beat_strength) {
     const int clamped_base = std::max(base_count, 0);
@@ -117,7 +120,9 @@ void SpaceRockAnimation::update(float delta_time,
 
         for (auto& square : squares_) {
             square.age += dt * params_.square_decay_rate;
-            square.target_size = target_size;
+            square.target_size = std::clamp(target_size * square.size_multiplier,
+                                            params_.min_size,
+                                            params_.max_size);
             if (interpolation_rate <= 0.0f) {
                 square.size = square.target_size;
             } else {
@@ -195,8 +200,31 @@ void SpaceRockAnimation::render(notcurses* /*nc*/) {
         return;
     }
 
-    const int frame_height = std::max(2, static_cast<int>(std::round(plane_rows_ * kFrameFillRatio)));
-    const int frame_width = std::max(2, static_cast<int>(std::round(plane_cols_ * kFrameFillRatio)));
+    if (plane_rows_ < 2u || plane_cols_ < 2u) {
+        return;
+    }
+
+    const float plane_physical_height = static_cast<float>(plane_rows_);
+    const float plane_physical_width = static_cast<float>(plane_cols_) * kCellWidthToHeightRatio;
+    const float max_physical_extent = std::min(plane_physical_height, plane_physical_width);
+    const float target_physical_extent =
+        std::max(1.0f, max_physical_extent * kFrameFillRatio);
+
+    const int max_width_for_height =
+        std::max(2, static_cast<int>(std::floor(static_cast<float>(plane_rows_) / kCellWidthToHeightRatio)));
+
+    int frame_width = static_cast<int>(std::round(target_physical_extent / kCellWidthToHeightRatio));
+    frame_width = std::clamp(frame_width, 2, std::min(static_cast<int>(plane_cols_), max_width_for_height));
+
+    int frame_height = static_cast<int>(std::round(frame_width * kCellWidthToHeightRatio));
+    frame_height = std::clamp(frame_height, 2, static_cast<int>(plane_rows_));
+
+    frame_width = std::clamp(static_cast<int>(std::round(frame_height / kCellWidthToHeightRatio)),
+                             2,
+                             static_cast<int>(plane_cols_));
+    frame_height = std::clamp(static_cast<int>(std::round(frame_width * kCellWidthToHeightRatio)),
+                              2,
+                              static_cast<int>(plane_rows_));
 
     const int max_frame_y = static_cast<int>(plane_rows_) - frame_height;
     const int max_frame_x = static_cast<int>(plane_cols_) - frame_width;
@@ -333,32 +361,62 @@ void SpaceRockAnimation::render_square(const Square& square,
     const float clamped_y = std::clamp(square.y, 0.0f, 1.0f);
     const float clamped_size = std::clamp(square.size, 0.0f, 1.0f);
 
-    const int base_extent = std::max(1, static_cast<int>(std::round(clamped_size * std::min(interior_height, interior_width))));
-    const int square_height = base_extent;
-    const int square_width = base_extent;
+    const float interior_physical_height = static_cast<float>(interior_height);
+    const float interior_physical_width = static_cast<float>(interior_width) * kCellWidthToHeightRatio;
+    const float max_physical_extent = std::min(interior_physical_height, interior_physical_width);
+    const float physical_extent = std::max(1.0f, clamped_size * max_physical_extent);
 
-    const int center_y = interior_y + static_cast<int>(std::round(clamped_y * (interior_height - 1)));
-    const int center_x = interior_x + static_cast<int>(std::round(clamped_x * (interior_width - 1)));
+    int square_width = std::max(1, static_cast<int>(std::round(physical_extent / kCellWidthToHeightRatio)));
+    square_width = std::min(square_width, interior_width);
+    int square_height = std::max(1, static_cast<int>(std::round(square_width * kCellWidthToHeightRatio)));
+    square_height = std::min(square_height, interior_height);
+
+    // Adjust width again after clamping height to keep the perceived aspect ratio.
+    square_width = std::min(
+        std::max(1, static_cast<int>(std::round(static_cast<float>(square_height) / kCellWidthToHeightRatio))),
+        interior_width);
+    square_height = std::min(
+        interior_height,
+        std::max(1, static_cast<int>(std::round(static_cast<float>(square_width) * kCellWidthToHeightRatio))));
+
+    const float horizontal_range_physical =
+        std::max(0.0f, (static_cast<float>(interior_width) - 1.0f) * kCellWidthToHeightRatio);
+    const int center_y = interior_y +
+                         static_cast<int>(std::round(clamped_y * std::max(0, interior_height - 1)));
+    const int center_x = interior_x + static_cast<int>(std::round(
+                                          horizontal_range_physical > 0.0f
+                                              ? (clamped_x * horizontal_range_physical /
+                                                 kCellWidthToHeightRatio)
+                                              : 0.0f));
+
+    const int clamped_center_x = std::clamp(center_x, interior_x, interior_x + interior_width - 1);
+    const int clamped_center_y = std::clamp(center_y, interior_y, interior_y + interior_height - 1);
 
     const int max_top = interior_y + interior_height - square_height;
     const int max_left = interior_x + interior_width - square_width;
 
-    const int top = std::clamp(center_y - square_height / 2, interior_y, std::max(interior_y, max_top));
-    const int left = std::clamp(center_x - square_width / 2, interior_x, std::max(interior_x, max_left));
+    const int top = std::clamp(clamped_center_y - square_height / 2,
+                               interior_y,
+                               std::max(interior_y, max_top));
+    const int left = std::clamp(clamped_center_x - square_width / 2,
+                                interior_x,
+                                std::max(interior_x, max_left));
 
-    std::string row_pattern;
-    row_pattern.reserve(static_cast<size_t>(square_width) * 3u);
-    for (int i = 0; i < square_width; ++i) {
-        row_pattern.append("█");
+    nccell fill = NCCELL_TRIVIAL_INITIALIZER;
+    static constexpr uint32_t kFullBlock = 0x2588;  // Unicode full block character.
+    if (nccell_load_ucs32(plane_, &fill, kFullBlock) <= 0) {
+        return;
     }
-
     for (int row = 0; row < square_height; ++row) {
         const int draw_y = top + row;
         if (draw_y < interior_y || draw_y >= interior_y + interior_height) {
             continue;
         }
-        ncplane_putstr_yx(plane_, draw_y, left, row_pattern.c_str());
+        for (int col = 0; col < square_width; ++col) {
+            ncplane_putc_yx(plane_, draw_y, left + col, &fill);
+        }
     }
+    nccell_release(plane_, &fill);
 }
 
 float SpaceRockAnimation::compute_spawn_size(const AudioFeatures& features) const {
@@ -381,6 +439,7 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
 
     const float spawn_size = compute_spawn_size(features);
     std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
+    std::uniform_real_distribution<float> size_jitter_distribution(0.55f, 1.6f);
     const float centroid_bias = clamp01(features.spectral_centroid);
     for (int i = 0; i < count; ++i) {
         Square square{};
@@ -391,8 +450,11 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
                            (1.0f - centroid_bias) * bottom_position);
         square.target_x = square.x;
         square.target_y = square.y;
-        square.size = spawn_size;
-        square.target_size = spawn_size;
+        square.size_multiplier = size_jitter_distribution(rng_);
+        const float initial_size =
+            std::clamp(spawn_size * square.size_multiplier, params_.min_size, params_.max_size);
+        square.size = initial_size;
+        square.target_size = initial_size;
         square.age = 0.0f;
         square.lifespan = params_.square_lifespan_s;
         squares_.push_back(square);
