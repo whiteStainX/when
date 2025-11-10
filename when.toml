@@ -65,6 +65,10 @@ space_rock_square_lifespan_ms = 1600.0
 space_rock_square_decay_rate = 1.0
 space_rock_max_squares_floor = 14
 space_rock_max_squares_scale = 42.0
+space_rock_min_size = 0.08
+space_rock_max_size = 0.32
+space_rock_mid_beat_size_multiplier = 1.4
+space_rock_size_interp_rate = 3.5
 
 [[animations]]
 type = "Pleasure"
