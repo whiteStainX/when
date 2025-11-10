@@ -350,10 +350,14 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
 
     const float spawn_size = compute_spawn_size(features);
     std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
+    const float centroid_bias = clamp01(features.spectral_centroid);
     for (int i = 0; i < count; ++i) {
         Square square{};
         square.x = distribution(rng_);
-        square.y = distribution(rng_);
+        const float top_position = distribution(rng_) * 0.5f;
+        const float bottom_position = 0.5f + distribution(rng_) * 0.5f;
+        square.y = clamp01(centroid_bias * top_position +
+                           (1.0f - centroid_bias) * bottom_position);
         square.size = spawn_size;
         square.target_size = spawn_size;
         square.age = 0.0f;
