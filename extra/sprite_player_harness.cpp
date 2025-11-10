@@ -19,13 +19,15 @@ int main(int argc, char** argv) {
     using when::animations::band::SpriteSequence;
     using when::animations::band::load_sprite_sequence_from_directory;
 
-    fs::path assets_root = "assets/sprites";
-    if (argc > 1) {
-        assets_root = argv[1];
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <sprite-directory>\n", argv[0]);
+        fprintf(stderr, "Provide a path containing per-frame .txt files to preview.\n");
+        return 1;
     }
 
+    const fs::path sequence_root = argv[1];
     try {
-        SpriteSequence sequence = load_sprite_sequence_from_directory(assets_root / "guitarist");
+        SpriteSequence sequence = load_sprite_sequence_from_directory(sequence_root);
         if (sequence.empty()) {
             fprintf(stderr, "No frames loaded for guitarist sequence\n");
             return 1;
