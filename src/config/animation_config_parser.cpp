@@ -248,6 +248,48 @@ std::optional<AnimationConfig> parse_animation_config(
                       anim_config.space_rock_mid_beat_size_multiplier);
     }
 
+    const auto space_rock_bass_size_scale_it =
+        raw_anim_config.find("space_rock_bass_size_scale");
+    if (space_rock_bass_size_scale_it != raw_anim_config.end()) {
+        parse_float32(space_rock_bass_size_scale_it->second.value,
+                      anim_config.space_rock_bass_size_scale);
+    }
+
+    const auto space_rock_treble_size_scale_it =
+        raw_anim_config.find("space_rock_treble_size_scale");
+    if (space_rock_treble_size_scale_it != raw_anim_config.end()) {
+        parse_float32(space_rock_treble_size_scale_it->second.value,
+                      anim_config.space_rock_treble_size_scale);
+    }
+
+    const auto space_rock_low_band_min_y_it =
+        raw_anim_config.find("space_rock_low_band_min_y");
+    if (space_rock_low_band_min_y_it != raw_anim_config.end()) {
+        parse_float32(space_rock_low_band_min_y_it->second.value,
+                      anim_config.space_rock_low_band_min_y);
+    }
+
+    const auto space_rock_low_band_max_y_it =
+        raw_anim_config.find("space_rock_low_band_max_y");
+    if (space_rock_low_band_max_y_it != raw_anim_config.end()) {
+        parse_float32(space_rock_low_band_max_y_it->second.value,
+                      anim_config.space_rock_low_band_max_y);
+    }
+
+    const auto space_rock_high_band_min_y_it =
+        raw_anim_config.find("space_rock_high_band_min_y");
+    if (space_rock_high_band_min_y_it != raw_anim_config.end()) {
+        parse_float32(space_rock_high_band_min_y_it->second.value,
+                      anim_config.space_rock_high_band_min_y);
+    }
+
+    const auto space_rock_high_band_max_y_it =
+        raw_anim_config.find("space_rock_high_band_max_y");
+    if (space_rock_high_band_max_y_it != raw_anim_config.end()) {
+        parse_float32(space_rock_high_band_max_y_it->second.value,
+                      anim_config.space_rock_high_band_max_y);
+    }
+
     const auto space_rock_size_interp_rate_it =
         raw_anim_config.find("space_rock_size_interp_rate");
     if (space_rock_size_interp_rate_it != raw_anim_config.end()) {

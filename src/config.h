@@ -104,6 +104,12 @@ struct AnimationConfig {
     float space_rock_min_size = 0.1f;              // Minimum normalized square size
     float space_rock_max_size = 0.35f;             // Maximum normalized square size
     float space_rock_mid_beat_size_multiplier = 1.35f; // Size multiplier applied on mid-beat hits
+    float space_rock_bass_size_scale = 1.5f;       // Max size multiplier when bass dominates
+    float space_rock_treble_size_scale = 0.75f;    // Min size multiplier when treble dominates
+    float space_rock_low_band_min_y = 0.55f;       // Lower bound for bass-dominant spawns
+    float space_rock_low_band_max_y = 0.95f;       // Upper bound for bass-dominant spawns
+    float space_rock_high_band_min_y = 0.05f;      // Lower bound for treble-dominant spawns
+    float space_rock_high_band_max_y = 0.45f;      // Upper bound for treble-dominant spawns
     float space_rock_size_interp_rate = 4.0f;      // Interpolation rate for breathing towards envelope size
     float space_rock_max_jitter = 0.6f;            // Maximum normalized jitter velocity applied per second
     float space_rock_position_interp_rate = 6.0f;  // Interpolation rate driving tempo-synced translation
