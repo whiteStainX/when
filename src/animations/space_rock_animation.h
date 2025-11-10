@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <random>
 #include <vector>
 
@@ -22,6 +23,9 @@ public:
         float size_multiplier = 1.0f;
         float age = 0.0f;
         float lifespan = 0.0f;
+        std::uint8_t color_r = 0u;
+        std::uint8_t color_g = 0u;
+        std::uint8_t color_b = 0u;
     };
 
     SpaceRockAnimation();
