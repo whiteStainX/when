@@ -19,6 +19,7 @@ public:
         float target_y = 0.0f;
         float size = 0.0f;
         float target_size = 0.0f;
+        float size_multiplier = 1.0f;
         float age = 0.0f;
         float lifespan = 0.0f;
     };
