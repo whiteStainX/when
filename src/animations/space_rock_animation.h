@@ -57,6 +57,12 @@ private:
         float min_size = 0.1f;
         float max_size = 0.35f;
         float mid_beat_size_multiplier = 1.35f;
+        float bass_size_scale = 1.5f;
+        float treble_size_scale = 0.75f;
+        float low_band_min_y = 0.55f;
+        float low_band_max_y = 0.95f;
+        float high_band_min_y = 0.05f;
+        float high_band_max_y = 0.45f;
         float size_interp_rate = 4.0f;
         float max_jitter = 0.6f;
         float position_interp_rate = 6.0f;

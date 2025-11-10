@@ -68,6 +68,12 @@ space_rock_max_squares_scale = 42.0
 space_rock_min_size = 0.08
 space_rock_max_size = 0.32
 space_rock_mid_beat_size_multiplier = 1.4
+space_rock_bass_size_scale = 1.6
+space_rock_treble_size_scale = 0.7
+space_rock_low_band_min_y = 0.6
+space_rock_low_band_max_y = 0.95
+space_rock_high_band_min_y = 0.05
+space_rock_high_band_max_y = 0.4
 space_rock_size_interp_rate = 3.5
 
 [[animations]]

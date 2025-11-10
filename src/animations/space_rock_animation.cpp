@@ -4,6 +4,7 @@
 #include <cmath>
 #include <chrono>
 #include <cstdint>
+#include <limits>
 #include <random>
 
 #include "animation_event_utils.h"
@@ -38,10 +39,27 @@ float clamp01(float value) {
     return std::clamp(value, 0.0f, 1.0f);
 }
 
+float lerp(float a, float b, float t) {
+    return a + (b - a) * clamp01(t);
+}
+
 float compute_size_from_normalized(float normalized_value, float min_size, float max_size) {
     const float clamped_min = std::max(0.0f, min_size);
     const float clamped_max = std::max(clamped_min, max_size);
     return clamped_min + (clamped_max - clamped_min) * clamp01(normalized_value);
+}
+
+float compute_low_frequency_bias(const AudioFeatures& features) {
+    const float centroid = clamp01(features.spectral_centroid);
+    const float bass_component = clamp01(features.bass_envelope);
+    const float treble_component = clamp01(features.treble_envelope);
+    const float bass_weight = 0.5f * (bass_component + (1.0f - centroid));
+    const float treble_weight = 0.5f * (treble_component + centroid);
+    const float total = bass_weight + treble_weight;
+    if (total <= std::numeric_limits<float>::epsilon()) {
+        return 0.5f;
+    }
+    return clamp01(bass_weight / total);
 }
 } // namespace
 
@@ -103,14 +121,28 @@ void SpaceRockAnimation::update(float delta_time,
         if (beat_triggered) {
             std::uniform_real_distribution<float> zero_to_one(0.0f, 1.0f);
             std::uniform_real_distribution<float> jitter_distribution(-jitter_magnitude, jitter_magnitude);
-            const float centroid_bias = clamp01(features.spectral_centroid);
+            const float low_frequency_bias = compute_low_frequency_bias(features);
+            const float low_span = std::max(0.0f, params_.low_band_max_y - params_.low_band_min_y);
+            const float high_span = std::max(0.0f, params_.high_band_max_y - params_.high_band_min_y);
+
+            auto sample_low_band = [&]() {
+                if (low_span <= 0.0f) {
+                    return clamp01(params_.low_band_min_y);
+                }
+                return clamp01(params_.low_band_min_y + zero_to_one(rng_) * low_span);
+            };
+            auto sample_high_band = [&]() {
+                if (high_span <= 0.0f) {
+                    return clamp01(params_.high_band_min_y);
+                }
+                return clamp01(params_.high_band_min_y + zero_to_one(rng_) * high_span);
+            };
 
             for (auto& square : squares_) {
                 const float random_x = zero_to_one(rng_);
-                const float top_position = zero_to_one(rng_) * 0.5f;
-                const float bottom_position = 0.5f + zero_to_one(rng_) * 0.5f;
-                const float biased_y = clamp01(centroid_bias * top_position +
-                                               (1.0f - centroid_bias) * bottom_position);
+                const float low_sample = sample_low_band();
+                const float high_sample = sample_high_band();
+                const float biased_y = clamp01(lerp(high_sample, low_sample, low_frequency_bias));
 
                 const float jitter_offset_x = jitter_magnitude > 0.0f ? jitter_distribution(rng_) : 0.0f;
                 const float jitter_offset_y = jitter_magnitude > 0.0f ? jitter_distribution(rng_) : 0.0f;
@@ -286,6 +318,18 @@ void SpaceRockAnimation::load_parameters_from_config(const AppConfig& config) {
         params_.max_size = std::max(params_.min_size, anim_config.space_rock_max_size);
         params_.mid_beat_size_multiplier =
             std::max(0.0f, anim_config.space_rock_mid_beat_size_multiplier);
+        params_.bass_size_scale = std::max(0.0f, anim_config.space_rock_bass_size_scale);
+        params_.treble_size_scale = std::max(0.0f, anim_config.space_rock_treble_size_scale);
+        params_.low_band_min_y = clamp01(anim_config.space_rock_low_band_min_y);
+        params_.low_band_max_y = clamp01(anim_config.space_rock_low_band_max_y);
+        if (params_.low_band_max_y < params_.low_band_min_y) {
+            std::swap(params_.low_band_min_y, params_.low_band_max_y);
+        }
+        params_.high_band_min_y = clamp01(anim_config.space_rock_high_band_min_y);
+        params_.high_band_max_y = clamp01(anim_config.space_rock_high_band_max_y);
+        if (params_.high_band_max_y < params_.high_band_min_y) {
+            std::swap(params_.high_band_min_y, params_.high_band_max_y);
+        }
         params_.size_interp_rate = std::max(0.0f, anim_config.space_rock_size_interp_rate);
         params_.max_jitter = std::max(0.0f, anim_config.space_rock_max_jitter);
         params_.position_interp_rate =
@@ -456,8 +500,18 @@ float SpaceRockAnimation::compute_spawn_size(const AudioFeatures& features) cons
     const float base_size = compute_size_from_normalized(features.mid_energy_instantaneous,
                                                          params_.min_size,
                                                          params_.max_size);
+    const float centroid = clamp01(features.spectral_centroid);
+    const float bass_component = clamp01(features.bass_envelope);
+    const float treble_component = clamp01(features.treble_envelope);
+    const float bass_emphasis = clamp01(0.5f * (bass_component + (1.0f - centroid)));
+    const float treble_emphasis = clamp01(0.5f * (treble_component + centroid));
+    const float bass_scale =
+        lerp(1.0f, std::max(params_.bass_size_scale, 0.0f), bass_emphasis);
+    const float treble_scale =
+        lerp(1.0f, std::max(params_.treble_size_scale, 0.0f), treble_emphasis);
     const float size_multiplier = features.mid_beat ? params_.mid_beat_size_multiplier : 1.0f;
-    const float scaled_size = base_size * std::max(size_multiplier, 0.0f);
+    const float scaled_size =
+        base_size * bass_scale * treble_scale * std::max(size_multiplier, 0.0f);
     return std::clamp(scaled_size, params_.min_size, params_.max_size);
 }
 
@@ -473,14 +527,29 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
     const float spawn_size = compute_spawn_size(features);
     std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
     std::uniform_real_distribution<float> size_jitter_distribution(0.55f, 1.6f);
-    const float centroid_bias = clamp01(features.spectral_centroid);
+    const float low_frequency_bias = compute_low_frequency_bias(features);
+    const float low_span = std::max(0.0f, params_.low_band_max_y - params_.low_band_min_y);
+    const float high_span = std::max(0.0f, params_.high_band_max_y - params_.high_band_min_y);
+
+    auto sample_low_band = [&]() {
+        if (low_span <= 0.0f) {
+            return clamp01(params_.low_band_min_y);
+        }
+        return clamp01(params_.low_band_min_y + distribution(rng_) * low_span);
+    };
+    auto sample_high_band = [&]() {
+        if (high_span <= 0.0f) {
+            return clamp01(params_.high_band_min_y);
+        }
+        return clamp01(params_.high_band_min_y + distribution(rng_) * high_span);
+    };
+
     for (int i = 0; i < count; ++i) {
         Square square{};
         square.x = distribution(rng_);
-        const float top_position = distribution(rng_) * 0.5f;
-        const float bottom_position = 0.5f + distribution(rng_) * 0.5f;
-        square.y = clamp01(centroid_bias * top_position +
-                           (1.0f - centroid_bias) * bottom_position);
+        const float low_sample = sample_low_band();
+        const float high_sample = sample_high_band();
+        square.y = clamp01(lerp(high_sample, low_sample, low_frequency_bias));
         square.target_x = square.x;
         square.target_y = square.y;
         square.size_multiplier = size_jitter_distribution(rng_);
