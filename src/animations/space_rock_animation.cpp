@@ -13,12 +13,21 @@ namespace animations {
 namespace {
 constexpr float kFrameFillRatio = 0.8f;
 constexpr float kDefaultSquareSize = 0.18f;
+constexpr float kMillisecondsToSeconds = 0.001f;
 
 int compute_spawn_count(int base_count, float strength_scale, float beat_strength) {
     const int clamped_base = std::max(base_count, 0);
     const float clamped_strength = std::max(beat_strength, 0.0f);
     const int scaled = static_cast<int>(std::round(clamped_strength * strength_scale));
     return clamped_base + std::max(scaled, 0);
+}
+
+int compute_max_squares(int floor, float scale, float bass_envelope) {
+    const int clamped_floor = std::max(floor, 0);
+    const float clamped_envelope = std::max(bass_envelope, 0.0f);
+    const float scaled = clamped_envelope * std::max(scale, 0.0f);
+    const int dynamic = static_cast<int>(std::round(scaled));
+    return clamped_floor + std::max(dynamic, 0);
 }
 } // namespace
 
@@ -52,7 +61,7 @@ void SpaceRockAnimation::init(notcurses* nc, const AppConfig& config) {
     create_or_resize_plane(nc, config);
 }
 
-void SpaceRockAnimation::update(float /*delta_time*/,
+void SpaceRockAnimation::update(float delta_time,
                                 const AudioMetrics& /*metrics*/,
                                 const AudioFeatures& features) {
     if (!plane_) {
@@ -60,6 +69,45 @@ void SpaceRockAnimation::update(float /*delta_time*/,
     }
 
     ncplane_dim_yx(plane_, &plane_rows_, &plane_cols_);
+
+    const float dt = std::max(delta_time, 0.0f);
+    if (!squares_.empty()) {
+        for (auto& square : squares_) {
+            square.age += dt * params_.square_decay_rate;
+        }
+
+        squares_.erase(std::remove_if(squares_.begin(),
+                                      squares_.end(),
+                                      [](const Square& square) {
+                                          if (square.lifespan <= 0.0f) {
+                                              return true;
+                                          }
+                                          return square.age >= square.lifespan;
+                                      }),
+                       squares_.end());
+    }
+
+    const int max_squares = compute_max_squares(params_.max_squares_floor,
+                                                params_.max_squares_scale,
+                                                features.bass_envelope);
+
+    auto enforce_max_squares = [&](int target_max) {
+        const int clamped_max = std::max(target_max, 0);
+        if (static_cast<int>(squares_.size()) <= clamped_max) {
+            return;
+        }
+
+        std::stable_sort(squares_.begin(), squares_.end(), [](const Square& a, const Square& b) {
+            return a.age < b.age;
+        });
+
+        const std::size_t keep_count = static_cast<std::size_t>(clamped_max);
+        if (keep_count < squares_.size()) {
+            squares_.erase(squares_.begin() + keep_count, squares_.end());
+        }
+    };
+
+    enforce_max_squares(max_squares);
 
     if (features.bass_beat) {
         const int spawn_count =
@@ -70,6 +118,8 @@ void SpaceRockAnimation::update(float /*delta_time*/,
             spawn_squares(spawn_count);
         }
     }
+
+    enforce_max_squares(max_squares);
 }
 
 void SpaceRockAnimation::render(notcurses* /*nc*/) {
@@ -134,6 +184,11 @@ void SpaceRockAnimation::load_parameters_from_config(const AppConfig& config) {
         is_active_ = anim_config.initially_active;
         params_.spawn_base_count = anim_config.space_rock_spawn_base_count;
         params_.spawn_strength_scale = anim_config.space_rock_spawn_strength_scale;
+        params_.square_lifespan_s =
+            std::max(0.0f, anim_config.space_rock_square_lifespan_ms * kMillisecondsToSeconds);
+        params_.square_decay_rate = std::max(0.0f, anim_config.space_rock_square_decay_rate);
+        params_.max_squares_floor = std::max(0, anim_config.space_rock_max_squares_floor);
+        params_.max_squares_scale = std::max(0.0f, anim_config.space_rock_max_squares_scale);
         break;
     }
 }
@@ -246,6 +301,8 @@ void SpaceRockAnimation::spawn_squares(int count) {
         square.x = distribution(rng_);
         square.y = distribution(rng_);
         square.size = kDefaultSquareSize;
+        square.age = 0.0f;
+        square.lifespan = params_.square_lifespan_s;
         squares_.push_back(square);
     }
 }

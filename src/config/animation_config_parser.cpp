@@ -203,6 +203,34 @@ std::optional<AnimationConfig> parse_animation_config(
                       anim_config.space_rock_spawn_strength_scale);
     }
 
+    const auto space_rock_square_lifespan_ms_it =
+        raw_anim_config.find("space_rock_square_lifespan_ms");
+    if (space_rock_square_lifespan_ms_it != raw_anim_config.end()) {
+        parse_float32(space_rock_square_lifespan_ms_it->second.value,
+                      anim_config.space_rock_square_lifespan_ms);
+    }
+
+    const auto space_rock_square_decay_rate_it =
+        raw_anim_config.find("space_rock_square_decay_rate");
+    if (space_rock_square_decay_rate_it != raw_anim_config.end()) {
+        parse_float32(space_rock_square_decay_rate_it->second.value,
+                      anim_config.space_rock_square_decay_rate);
+    }
+
+    const auto space_rock_max_squares_floor_it =
+        raw_anim_config.find("space_rock_max_squares_floor");
+    if (space_rock_max_squares_floor_it != raw_anim_config.end()) {
+        parse_int32(space_rock_max_squares_floor_it->second.value,
+                    anim_config.space_rock_max_squares_floor);
+    }
+
+    const auto space_rock_max_squares_scale_it =
+        raw_anim_config.find("space_rock_max_squares_scale");
+    if (space_rock_max_squares_scale_it != raw_anim_config.end()) {
+        parse_float32(space_rock_max_squares_scale_it->second.value,
+                      anim_config.space_rock_max_squares_scale);
+    }
+
     const auto rain_angle_it = raw_anim_config.find("rain_angle_degrees");
     if (rain_angle_it != raw_anim_config.end()) {
         parse_float32(rain_angle_it->second.value, anim_config.rain_angle_degrees);
