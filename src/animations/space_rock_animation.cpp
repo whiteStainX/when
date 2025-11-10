@@ -1,6 +1,7 @@
 #include "space_rock_animation.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <chrono>
 #include <cstdint>
@@ -62,6 +63,40 @@ float compute_low_frequency_bias(const AudioFeatures& features) {
     }
     return clamp01(bass_weight / total);
 }
+
+float compute_treble_intensity(const AudioFeatures& features) {
+    const float envelope = clamp01(features.treble_envelope);
+    const float instantaneous = clamp01(features.treble_energy_instantaneous);
+    const float centroid = clamp01(features.spectral_centroid);
+    const float beat_boost = features.treble_beat ? 1.0f : 0.0f;
+    const float combined = 0.45f * envelope + 0.35f * instantaneous + 0.2f * (centroid + beat_boost);
+    return clamp01(combined);
+}
+
+std::array<std::uint8_t, 3> compute_square_color(const AudioFeatures& features, std::mt19937& rng) {
+    std::uniform_real_distribution<float> color_noise(0.9f, 1.2f);
+    const float centroid = clamp01(features.spectral_centroid);
+    const float flatness = clamp01(features.spectral_flatness);
+    const float treble_env = clamp01(features.treble_envelope);
+    const float treble_inst = clamp01(features.treble_energy_instantaneous);
+    const float treble_factor = std::max(treble_env, treble_inst);
+    const float timbre_focus = clamp01(1.0f - flatness);
+    const float brightness = clamp01(0.35f + 0.65f * treble_factor);
+    const float warm = clamp01(1.0f - centroid);
+    const float cool = centroid;
+    const float noise = color_noise(rng);
+
+    auto to_channel = [](float value) -> std::uint8_t {
+        const float clamped = clamp01(value);
+        return static_cast<std::uint8_t>(std::lround(clamped * 255.0f));
+    };
+
+    const float red = brightness * (0.55f + 0.45f * warm) * noise;
+    const float green = brightness * (0.35f + 0.65f * timbre_focus) * noise;
+    const float blue = brightness * (0.45f + 0.55f * cool + 0.25f * treble_factor) * noise;
+
+    return {to_channel(red), to_channel(green), to_channel(blue)};
+}
 } // namespace
 
 SpaceRockAnimation::SpaceRockAnimation()
@@ -106,9 +141,11 @@ void SpaceRockAnimation::update(float delta_time,
 
     const float dt = std::max(delta_time, 0.0f);
     const float target_size = compute_target_size_from_envelope(features.mid_envelope);
-    const float jitter_magnitude =
-        std::max(features.treble_energy, 0.0f) * std::max(params_.max_jitter, 0.0f);
-    const bool beat_triggered = features.beat_detected && !was_beat_detected_;
+    const float treble_intensity = compute_treble_intensity(features);
+    const float jitter_magnitude = treble_intensity * std::max(params_.max_jitter, 0.0f);
+    const bool base_beat_triggered = features.beat_detected && !was_beat_detected_;
+    const bool treble_triggered = features.treble_beat || treble_intensity > 0.85f;
+    const bool reposition_triggered = base_beat_triggered || treble_triggered;
     was_beat_detected_ = features.beat_detected;
 
     if (!squares_.empty()) {
@@ -117,9 +154,11 @@ void SpaceRockAnimation::update(float delta_time,
         const float beat_phase = clamp01(features.beat_phase);
         const float position_rate = std::max(params_.position_interp_rate, 0.0f);
         const float position_step_base = std::clamp(position_rate * dt, 0.0f, 1.0f);
-        const float position_step = std::clamp(std::max(position_step_base, beat_phase), 0.0f, 1.0f);
+        float position_step = std::max(position_step_base, beat_phase);
+        position_step = std::max(position_step, treble_intensity);
+        position_step = std::clamp(position_step, 0.0f, 1.0f);
 
-        if (beat_triggered) {
+        if (reposition_triggered) {
             std::uniform_real_distribution<float> zero_to_one(0.0f, 1.0f);
             std::uniform_real_distribution<float> jitter_distribution(-jitter_magnitude, jitter_magnitude);
             const float low_frequency_bias = compute_low_frequency_bias(features);
@@ -145,8 +184,9 @@ void SpaceRockAnimation::update(float delta_time,
                 const float high_sample = sample_high_band();
                 const float biased_y = clamp01(lerp(high_sample, low_sample, low_frequency_bias));
 
-                const float jitter_offset_x = jitter_magnitude > 0.0f ? jitter_distribution(rng_) : 0.0f;
-                const float jitter_offset_y = jitter_magnitude > 0.0f ? jitter_distribution(rng_) : 0.0f;
+                const float jitter_scale = treble_triggered ? 1.0f : 0.6f;
+                const float jitter_offset_x = jitter_magnitude > 0.0f ? jitter_distribution(rng_) * jitter_scale : 0.0f;
+                const float jitter_offset_y = jitter_magnitude > 0.0f ? jitter_distribution(rng_) * jitter_scale : 0.0f;
 
                 square.target_x = clamp01(random_x + jitter_offset_x);
                 square.target_y = clamp01(biased_y + jitter_offset_y);
@@ -154,8 +194,10 @@ void SpaceRockAnimation::update(float delta_time,
         }
 
         for (auto& square : squares_) {
-            square.age += dt * params_.square_decay_rate;
-            square.target_size = std::clamp(target_size * square.size_multiplier,
+            const float decay_scale = lerp(0.75f, 1.3f, treble_intensity);
+            square.age += dt * params_.square_decay_rate * decay_scale;
+            const float treble_size_scale = lerp(1.0f, 1.4f, treble_intensity);
+            square.target_size = std::clamp(target_size * square.size_multiplier * treble_size_scale,
                                             params_.min_size,
                                             params_.max_size);
             if (interpolation_rate <= 0.0f) {
@@ -217,6 +259,18 @@ void SpaceRockAnimation::update(float delta_time,
                                 features.beat_strength);
         if (spawn_count > 0) {
             spawn_squares(spawn_count, features);
+        }
+    }
+
+    if (features.treble_beat || treble_intensity > 0.65f) {
+        const float treble_strength = features.treble_beat
+                                          ? std::max(features.beat_strength, treble_intensity)
+                                          : treble_intensity;
+        const int treble_spawn = compute_spawn_count(0,
+                                                     params_.spawn_strength_scale * 0.65f,
+                                                     treble_strength);
+        if (treble_spawn > 0) {
+            spawn_squares(treble_spawn, features);
         }
     }
 
@@ -531,6 +585,7 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
     const float low_frequency_bias = compute_low_frequency_bias(features);
     const float low_span = std::max(0.0f, params_.low_band_max_y - params_.low_band_min_y);
     const float high_span = std::max(0.0f, params_.high_band_max_y - params_.high_band_min_y);
+    const float treble_intensity = compute_treble_intensity(features);
 
     auto sample_low_band = [&]() {
         if (low_span <= 0.0f) {
@@ -553,16 +608,20 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
         square.y = clamp01(lerp(high_sample, low_sample, low_frequency_bias));
         square.target_x = square.x;
         square.target_y = square.y;
-        square.size_multiplier = size_jitter_distribution(rng_);
+        const float dramatic_scale = lerp(0.85f, 1.45f, treble_intensity);
+        square.size_multiplier = size_jitter_distribution(rng_) * dramatic_scale;
         const float initial_size =
             std::clamp(spawn_size * square.size_multiplier, params_.min_size, params_.max_size);
         square.size = initial_size;
         square.target_size = initial_size;
         square.age = 0.0f;
-        square.lifespan = params_.square_lifespan_s;
-        square.color_r = kDefaultSquareColor;
-        square.color_g = kDefaultSquareColor;
-        square.color_b = kDefaultSquareColor;
+        const float timbre_scale = lerp(0.75f, 1.4f, clamp01(1.0f - features.spectral_flatness));
+        const float treble_scale = lerp(0.85f, 1.35f, treble_intensity);
+        square.lifespan = params_.square_lifespan_s * timbre_scale * treble_scale;
+        const auto color = compute_square_color(features, rng_);
+        square.color_r = color[0];
+        square.color_g = color[1];
+        square.color_b = color[2];
         squares_.push_back(square);
     }
 }
