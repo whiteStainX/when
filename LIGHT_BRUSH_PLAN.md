@@ -12,8 +12,11 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 1.  Create `src/animations/light_brush_animation.h` and `src/animations/light_brush_animation.cpp`.
 2.  In the header, define the `LightBrushAnimation` class, inheriting from `when::animations::Animation`.
-3.  Implement the required virtual methods (`init`, `update`, `render`, etc.) with placeholder logic.
+3.  Implement the required virtual methods (`init`, `bind_events`, `update`, `render`, etc.) with placeholder logic.
 4.  Add the new `.cpp` file to `CMakeLists.txt` and register the animation type as `"LightBrush"` in `animation_manager.cpp`.
+
+> **Note:** `bind_events()` must call `bind_standard_frame_updates()` (or equivalent helper from the guide) so that `update()`
+> receives frame callbacks. Document any additional triggers here if the animation later needs them.
 
 ### Step 0.2: Define Core Data Structures
 
@@ -66,11 +69,11 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 2.1: Implement Basic Movement and Turbulence
 
--   **Features:** `features.total_envelope`, `features.spectral_flatness`
+-   **Features:** `features.total_energy`, `features.spectral_flatness`
 -   **Logic:**
     1.  In `update()`, in the loop over all particles, update their position: `p.x += p.vx * dt; p.y += p.vy * dt;`.
     2.  Implement "turbulence." On each frame, add a small random vector to each particle's velocity. The magnitude of this random vector should be scaled by `features.spectral_flatness`.
-    3.  The base speed of the particles should be scaled by `features.total_envelope`.
+    3.  Scale the base speed of the particles by the smoothed energy in `features.total_energy` (or `total_energy_instantaneous` if a snappier response is desired). Document the chosen mapping so implementers know how energy translates into speed multipliers.
     4.  Add logic to make particles bounce off the inside walls of the frame.
 -   **Validation:** Particles now move around the canvas. Their movement is smooth and flowing for tonal music (low flatness) and chaotic/erratic for noisy music (high flatness).
 
