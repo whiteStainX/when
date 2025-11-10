@@ -149,6 +149,21 @@ void populate_dsp_config(const RawConfig& raw,
                   dsp.enable_chroma,
                   parse_bool,
                   warnings);
+    assign_scalar(raw,
+                  "dsp.bass_onset_sensitivity",
+                  dsp.bass_onset_sensitivity,
+                  parse_float32,
+                  warnings);
+    assign_scalar(raw,
+                  "dsp.mid_onset_sensitivity",
+                  dsp.mid_onset_sensitivity,
+                  parse_float32,
+                  warnings);
+    assign_scalar(raw,
+                  "dsp.treble_onset_sensitivity",
+                  dsp.treble_onset_sensitivity,
+                  parse_float32,
+                  warnings);
 }
 
 void populate_visual_config(const RawConfig& raw,

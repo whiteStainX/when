@@ -59,6 +59,7 @@ private:
         float mid_beat_size_multiplier = 1.35f;
         float bass_size_scale = 1.5f;
         float treble_size_scale = 0.75f;
+        float treble_spawn_threshold = 0.4f;
         float low_band_min_y = 0.55f;
         float low_band_max_y = 0.95f;
         float high_band_min_y = 0.05f;

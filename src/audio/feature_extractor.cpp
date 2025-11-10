@@ -288,20 +288,27 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
                              : 0.0f;
 
         const std::span<const float> baseline_span(band_flux_baseline_.data(), band_flux_baseline_.size());
-        const auto detect_band = [&](std::size_t start, std::size_t end) {
+        const auto pick_sensitivity = [&](float candidate) {
+            const float fallback = (config_.band_onset_sensitivity > 0.0f)
+                                       ? config_.band_onset_sensitivity
+                                       : 1.0f;
+            return (candidate > 0.0f) ? candidate : fallback;
+        };
+        const auto detect_band = [&](std::size_t start, std::size_t end, float sensitivity) {
             if (start >= end) {
                 return false;
             }
             const float band_value = compute_average_energy(band_flux, start, end);
             const float band_baseline = compute_average_energy(baseline_span, start, end);
+            const float applied_sensitivity = std::max(pick_sensitivity(sensitivity), 0.0f);
             const float threshold =
-                std::max(config_.band_onset_min_flux, band_baseline * config_.band_onset_sensitivity);
+                std::max(config_.band_onset_min_flux, band_baseline * applied_sensitivity);
             return band_value > threshold;
         };
 
-        features.bass_beat = detect_band(bass_start, bass_end);
-        features.mid_beat = detect_band(mid_start, mid_end);
-        features.treble_beat = detect_band(treble_start, treble_end);
+        features.bass_beat = detect_band(bass_start, bass_end, config_.bass_onset_sensitivity);
+        features.mid_beat = detect_band(mid_start, mid_end, config_.mid_onset_sensitivity);
+        features.treble_beat = detect_band(treble_start, treble_end, config_.treble_onset_sensitivity);
 
         aggregated_onset = onset_strength > config_.global_onset_threshold;
     } else {

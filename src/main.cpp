@@ -126,6 +126,9 @@ int main(int argc, char** argv) {
     feature_config.apply_a_weighting = config.dsp.apply_a_weighting;
     feature_config.enable_spectral_flatness = config.dsp.enable_spectral_flatness;
     feature_config.enable_chroma = config.dsp.enable_chroma;
+    feature_config.bass_onset_sensitivity = config.dsp.bass_onset_sensitivity;
+    feature_config.mid_onset_sensitivity = config.dsp.mid_onset_sensitivity;
+    feature_config.treble_onset_sensitivity = config.dsp.treble_onset_sensitivity;
 
     when::DspEngine dsp(event_bus,
                        sample_rate,
