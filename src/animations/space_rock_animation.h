@@ -53,6 +53,7 @@ private:
         float max_size = 0.35f;
         float mid_beat_size_multiplier = 1.35f;
         float size_interp_rate = 4.0f;
+        float max_jitter = 0.6f;
     };
 
     void load_parameters_from_config(const AppConfig& config);

@@ -81,6 +81,9 @@ void SpaceRockAnimation::update(float delta_time,
 
     const float dt = std::max(delta_time, 0.0f);
     const float target_size = compute_target_size_from_envelope(features.mid_envelope);
+    const float jitter_magnitude =
+        std::max(features.treble_energy, 0.0f) * std::max(params_.max_jitter, 0.0f);
+    std::uniform_real_distribution<float> jitter_distribution(-jitter_magnitude, jitter_magnitude);
 
     if (!squares_.empty()) {
         const float interpolation_rate = std::max(params_.size_interp_rate, 0.0f);
@@ -94,6 +97,17 @@ void SpaceRockAnimation::update(float delta_time,
                 square.size += (square.target_size - square.size) * interpolation_step;
             }
             square.size = std::clamp(square.size, params_.min_size, params_.max_size);
+
+            if (jitter_magnitude > 0.0f && dt > 0.0f) {
+                square.velocity_x = jitter_distribution(rng_);
+                square.velocity_y = jitter_distribution(rng_);
+            } else {
+                square.velocity_x = 0.0f;
+                square.velocity_y = 0.0f;
+            }
+
+            square.x = clamp01(square.x + square.velocity_x * dt);
+            square.y = clamp01(square.y + square.velocity_y * dt);
         }
 
         squares_.erase(std::remove_if(squares_.begin(),
@@ -214,6 +228,7 @@ void SpaceRockAnimation::load_parameters_from_config(const AppConfig& config) {
         params_.mid_beat_size_multiplier =
             std::max(0.0f, anim_config.space_rock_mid_beat_size_multiplier);
         params_.size_interp_rate = std::max(0.0f, anim_config.space_rock_size_interp_rate);
+        params_.max_jitter = std::max(0.0f, anim_config.space_rock_max_jitter);
         break;
     }
 }
