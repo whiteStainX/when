@@ -17,7 +17,8 @@ Detailed desctiption of the animation:
 1.  Create `src/animations/space_rock_animation.h` and `src/animations/space_rock_animation.cpp`.
 2.  In the header, define the `SpaceRockAnimation` class, inheriting from `when::animations::Animation`.
 3.  Implement the required virtual methods (`init`, `update`, `render`, etc.) with empty or placeholder logic.
-4.  Add the new `.cpp` file to `CMakeLists.txt` and register the animation type as `"SpaceRock"` in `animation_manager.cpp`.
+4.  Implement `bind_events()` so it calls `bind_standard_frame_updates(event_bus)` as described in `docs/DEV_GUIDE.md` §3; this keeps `update()` firing every frame through the standard event bus wiring.
+5.  Add the new `.cpp` file to `CMakeLists.txt` and register the animation type as `"SpaceRock"` in `animation_manager.cpp`.
 
 ### Step 0.2: Define Core Data Structures
 
@@ -50,23 +51,23 @@ Detailed desctiption of the animation:
 - **Feature:** `features.bass_beat`
 - **Logic:** In `update()`, check `if (features.bass_beat)`. If true, spawn a batch of new squares.
   - Create a helper function `spawnSquares(int count)` that adds new `Square` objects to the `squares_` vector at random initial positions.
-  - The number of squares to spawn can be a fixed number for now (e.g., 5), or proportional to `features.beat_strength`.
+  - Drive the spawn count from a config value exposed via `AnimationConfig` (e.g., `space_rock.spawn_base_count` in `when.toml`) and parsed in `src/config_loader.cpp`, optionally scaling it by `features.beat_strength`.
 - **Validation:** Squares appear in bursts, synchronized with the kick drum or bass line of the music.
 
 ### Step 1.2: Control Square Lifetime and Count
 
 - **Feature:** `features.bass_envelope`
 - **Logic:**
-  1.  Add an `age` or `lifespan` member to the `Square` struct. In `update()`, increment the age of all squares and remove any that have exceeded their lifespan.
-  2.  Use `features.bass_envelope` to control the maximum number of squares. In `update()`, after removing old squares, check `if (squares_.size() > max_squares)`. If so, remove the oldest squares until the count is below the maximum. The `max_squares` variable should be mapped from `features.bass_envelope` (e.g., `max_squares = 5 + bass_envelope * 50`).
+  1.  Add an `age` or `lifespan` member to the `Square` struct. In `update()`, increment the age of all squares and remove any that have exceeded their lifespan. Surface the base lifespan and decay rate as config values (e.g., `space_rock.square_lifespan_ms`) so they can be tuned without code changes.
+  2.  Use `features.bass_envelope` to control the maximum number of squares. In `update()`, after removing old squares, check `if (squares_.size() > max_squares)`. If so, remove the oldest squares until the count is below the maximum. The `max_squares` variable should be mapped from `features.bass_envelope` (e.g., `max_squares = config.max_squares_floor + bass_envelope * config.max_squares_scale`). Define these floor/scale constants in the `AnimationConfig` entry and add matching keys to `when.toml`.
 - **Validation:** The screen fills up with squares during loud bass sections and clears out during quiet ones. The visualization feels dense or sparse depending on the music's low-end energy.
 
 ### Step 1.3: Implement Dynamic Sizing
 
 - **Feature:** `features.mid_energy_instantaneous` and `features.mid_beat`
 - **Logic:**
-  1.  When spawning new squares (on a `bass_beat`), set their initial `size` based on `features.mid_energy_instantaneous`. A loud snare hit (`mid_beat` is also true) should result in a noticeably larger square.
-  2.  In `update()`, you can optionally add logic to make existing squares "breathe" by slowly interpolating their size towards a target based on `features.mid_envelope`.
+  1.  When spawning new squares (on a `bass_beat`), set their initial `size` based on `features.mid_energy_instantaneous`. A loud snare hit (`mid_beat` is also true) should result in a noticeably larger square. Clamp the min/max sizes using config parameters (e.g., `space_rock.min_size`, `space_rock.max_size`).
+  2.  In `update()`, you can optionally add logic to make existing squares "breathe" by slowly interpolating their size towards a target based on `features.mid_envelope`. Expose the interpolation rate as a tuning parameter in `when.toml` so designers can adjust responsiveness.
 - **Validation:** The size of the squares clearly reflects the energy of the melodic and snare elements of the track.
 
 ## Phase 2: Dynamic Movement and Texture
@@ -84,6 +85,7 @@ Detailed desctiption of the animation:
   square.y += random_between(-jitter_amount, jitter_amount);
   // Clamp positions to stay within the 0.0-1.0 bounds.
   ```
+- Configure `params_.max_jitter` in `AnimationConfig` (`when.toml` → `src/config_loader.cpp`) so artists can tweak the shimmer intensity per installation.
 - **Validation:** The squares shimmer and move around more during sections with lots of hi-hats and cymbals, and become still during quieter parts.
 
 ### Step 2.2: Implement Positional Mapping
