@@ -59,6 +59,8 @@ matrix_beat_threshold = 0.55
 type = "SpaceRock"
 z_index = 3
 initially_active = true
+space_rock_spawn_base_count = 4
+space_rock_spawn_strength_scale = 6.0
 
 [[animations]]
 type = "Pleasure"

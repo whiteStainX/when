@@ -189,6 +189,20 @@ std::optional<AnimationConfig> parse_animation_config(
         parse_float32(beat_threshold_it->second.value, anim_config.matrix_beat_threshold);
     }
 
+    const auto space_rock_spawn_base_count_it =
+        raw_anim_config.find("space_rock_spawn_base_count");
+    if (space_rock_spawn_base_count_it != raw_anim_config.end()) {
+        parse_int32(space_rock_spawn_base_count_it->second.value,
+                    anim_config.space_rock_spawn_base_count);
+    }
+
+    const auto space_rock_spawn_strength_scale_it =
+        raw_anim_config.find("space_rock_spawn_strength_scale");
+    if (space_rock_spawn_strength_scale_it != raw_anim_config.end()) {
+        parse_float32(space_rock_spawn_strength_scale_it->second.value,
+                      anim_config.space_rock_spawn_strength_scale);
+    }
+
     const auto rain_angle_it = raw_anim_config.find("rain_angle_degrees");
     if (rain_angle_it != raw_anim_config.end()) {
         parse_float32(rain_angle_it->second.value, anim_config.rain_angle_degrees);

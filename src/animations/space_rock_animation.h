@@ -1,5 +1,6 @@
 #pragma once
 
+#include <random>
 #include <vector>
 
 #include <notcurses/notcurses.h>
@@ -19,7 +20,7 @@ public:
         float velocity_y = 0.0f;
     };
 
-    SpaceRockAnimation() = default;
+    SpaceRockAnimation();
     ~SpaceRockAnimation() override;
 
     void init(notcurses* nc, const AppConfig& config) override;
@@ -38,6 +39,12 @@ public:
     void bind_events(const AnimationConfig& config, events::EventBus& bus) override;
 
 private:
+    struct Parameters {
+        int spawn_base_count = 3;
+        float spawn_strength_scale = 4.0f;
+    };
+
+    void load_parameters_from_config(const AppConfig& config);
     void create_or_resize_plane(notcurses* nc, const AppConfig& config);
     void draw_frame(int frame_y, int frame_x, int frame_height, int frame_width);
     void render_square(const Square& square,
@@ -45,6 +52,7 @@ private:
                        int interior_x,
                        int interior_height,
                        int interior_width);
+    void spawn_squares(int count);
 
     ncplane* plane_ = nullptr;
     int z_index_ = 0;
@@ -53,6 +61,8 @@ private:
     unsigned int plane_cols_ = 0;
 
     std::vector<Square> squares_;
+    Parameters params_{};
+    std::mt19937 rng_;
 };
 
 } // namespace animations
