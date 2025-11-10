@@ -100,3 +100,26 @@ target_include_directories(band_feature_taps_test PRIVATE
 
 add_test(NAME band_feature_taps_test COMMAND band_feature_taps_test)
 
+add_executable(audio_engine_stream_test
+  tests/audio_engine_stream_test.cpp
+  src/audio_engine.cpp
+)
+
+target_include_directories(audio_engine_stream_test PRIVATE
+  src
+  external/miniaudio
+)
+
+add_test(NAME audio_engine_stream_test COMMAND audio_engine_stream_test)
+
+add_executable(feature_extractor_weighting_test
+  tests/feature_extractor_weighting_test.cpp
+  src/audio/feature_extractor.cpp
+)
+
+target_include_directories(feature_extractor_weighting_test PRIVATE
+  src
+)
+
+add_test(NAME feature_extractor_weighting_test COMMAND feature_extractor_weighting_test)
+

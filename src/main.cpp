@@ -123,6 +123,7 @@ int main(int argc, char** argv) {
     when::FeatureExtractor::Config feature_config{};
     feature_config.smoothing_attack = config.dsp.smoothing_attack;
     feature_config.smoothing_release = config.dsp.smoothing_release;
+    feature_config.apply_a_weighting = config.dsp.apply_a_weighting;
     feature_config.enable_spectral_flatness = config.dsp.enable_spectral_flatness;
     feature_config.enable_chroma = config.dsp.enable_chroma;
 

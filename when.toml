@@ -27,6 +27,7 @@ smoothing_attack = 0.2
 smoothing_release = 0.05
 beat_sensitivity = 1.0
 enable_flux = true
+apply_a_weighting = true
 enable_spectral_flatness = true
 enable_chroma = true
 

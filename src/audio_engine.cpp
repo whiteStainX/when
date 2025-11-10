@@ -118,6 +118,7 @@ AudioEngine::AudioEngine(ma_uint32 sample_rate,
       decoder_initialized_(false),
       decoder_channels_(0),
       decoder_sample_rate_(0),
+      file_stream_channels_(0),
       resampler_initialized_(false),
       stop_stream_thread_(false) {}
 
@@ -293,10 +294,16 @@ bool AudioEngine::start() {
         decoder_sample_rate_ = sample_rate_;
     }
 
+    file_stream_channels_ = 1;
+
     if (decoder_sample_rate_ != sample_rate_) {
-        ma_resampler_config resampler_config =
-            ma_resampler_config_init(ma_format_f32, channels_, decoder_sample_rate_, sample_rate_, ma_resample_algorithm_linear);
-        resampler_config.channels = channels_;
+        const ma_uint32 produced_channels = std::max<ma_uint32>(1, file_stream_channels_);
+        ma_resampler_config resampler_config = ma_resampler_config_init(ma_format_f32,
+                                                                       produced_channels,
+                                                                       decoder_sample_rate_,
+                                                                       sample_rate_,
+                                                                       ma_resample_algorithm_linear);
+        resampler_config.channels = produced_channels;
         if (ma_resampler_init(&resampler_config, nullptr, &resampler_) != MA_SUCCESS) {
             ma_decoder_uninit(&decoder_);
             decoder_initialized_ = false;
@@ -344,6 +351,7 @@ void AudioEngine::stop() {
 
     ma_decoder_uninit(&decoder_);
     decoder_initialized_ = false;
+    file_stream_channels_ = 0;
 }
 
 std::size_t AudioEngine::read_samples(float* dest, std::size_t max_samples) {
@@ -380,7 +388,9 @@ void AudioEngine::file_stream_loop() {
     const std::size_t max_output_frames = resampler_initialized_
                                               ? static_cast<std::size_t>(std::ceil(chunk_frames * ratio)) + 8
                                               : chunk_frames;
-    std::vector<float> resample_buffer(resampler_initialized_ ? max_output_frames : 0);
+    const ma_uint32 produced_channels = std::max<ma_uint32>(1, file_stream_channels_);
+    std::vector<float> resample_buffer(resampler_initialized_ ? max_output_frames * produced_channels : 0);
+    std::vector<float> interleaved_buffer;
 
     while (!stop_stream_thread_.load(std::memory_order_relaxed)) {
         ma_uint64 frames_requested = chunk_frames;
@@ -405,8 +415,11 @@ void AudioEngine::file_stream_loop() {
 
         if (resampler_initialized_) {
             ma_uint64 input_frame_count = frames_read;
-            ma_uint64 output_frame_count = resample_buffer.size();
-            if (ma_resampler_process_pcm_frames(&resampler_, mono_buffer.data(), &input_frame_count, resample_buffer.data(),
+            ma_uint64 output_frame_count = resample_buffer.size() / produced_channels;
+            if (ma_resampler_process_pcm_frames(&resampler_,
+                                                mono_buffer.data(),
+                                                &input_frame_count,
+                                                resample_buffer.data(),
                                                 &output_frame_count) != MA_SUCCESS) {
                 continue;
             }
@@ -414,8 +427,33 @@ void AudioEngine::file_stream_loop() {
             data_to_write = resample_buffer.data();
         }
 
-        const std::size_t samples_to_write = frames_to_write * static_cast<std::size_t>(channels_);
-        const std::size_t written = ring_buffer_.write(data_to_write, samples_to_write);
+        std::size_t samples_to_write = frames_to_write * static_cast<std::size_t>(produced_channels);
+        const bool needs_expansion = channels_ != produced_channels;
+        const float* write_ptr = data_to_write;
+
+        if (needs_expansion && frames_to_write > 0) {
+            interleaved_buffer.resize(frames_to_write * static_cast<std::size_t>(channels_));
+            if (produced_channels == 1) {
+                for (std::size_t frame = 0; frame < frames_to_write; ++frame) {
+                    const float sample = data_to_write[frame];
+                    for (std::size_t ch = 0; ch < channels_; ++ch) {
+                        interleaved_buffer[frame * channels_ + ch] = sample;
+                    }
+                }
+            } else {
+                for (std::size_t frame = 0; frame < frames_to_write; ++frame) {
+                    for (std::size_t ch = 0; ch < channels_; ++ch) {
+                        const std::size_t source_channel = std::min<std::size_t>(ch, produced_channels - 1);
+                        interleaved_buffer[frame * channels_ + ch] =
+                            data_to_write[frame * produced_channels + source_channel];
+                    }
+                }
+            }
+            write_ptr = interleaved_buffer.data();
+            samples_to_write = interleaved_buffer.size();
+        }
+
+        const std::size_t written = ring_buffer_.write(write_ptr, samples_to_write);
         if (written < samples_to_write) {
             dropped_samples_.fetch_add(samples_to_write - written, std::memory_order_relaxed);
         }
