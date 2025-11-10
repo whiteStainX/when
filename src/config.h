@@ -101,6 +101,10 @@ struct AnimationConfig {
     float space_rock_square_decay_rate = 1.0f;     // Rate multiplier for square aging
     int space_rock_max_squares_floor = 12;         // Minimum number of active squares regardless of envelope
     float space_rock_max_squares_scale = 36.0f;    // Additional squares allowed at full bass envelope
+    float space_rock_min_size = 0.1f;              // Minimum normalized square size
+    float space_rock_max_size = 0.35f;             // Maximum normalized square size
+    float space_rock_mid_beat_size_multiplier = 1.35f; // Size multiplier applied on mid-beat hits
+    float space_rock_size_interp_rate = 4.0f;      // Interpolation rate for breathing towards envelope size
     float rain_angle_degrees = 0.0f;     // Angle for cyber rain drops (degrees, relative to vertical)
     float wave_speed_cols_per_s = 40.0f; // Sweep speed for lightning wave animations
     int wave_front_width_cols = 2;       // Width of the solid lightning front in columns

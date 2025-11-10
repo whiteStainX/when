@@ -12,7 +12,6 @@ namespace when {
 namespace animations {
 namespace {
 constexpr float kFrameFillRatio = 0.8f;
-constexpr float kDefaultSquareSize = 0.18f;
 constexpr float kMillisecondsToSeconds = 0.001f;
 
 int compute_spawn_count(int base_count, float strength_scale, float beat_strength) {
@@ -28,6 +27,16 @@ int compute_max_squares(int floor, float scale, float bass_envelope) {
     const float scaled = clamped_envelope * std::max(scale, 0.0f);
     const int dynamic = static_cast<int>(std::round(scaled));
     return clamped_floor + std::max(dynamic, 0);
+}
+
+float clamp01(float value) {
+    return std::clamp(value, 0.0f, 1.0f);
+}
+
+float compute_size_from_normalized(float normalized_value, float min_size, float max_size) {
+    const float clamped_min = std::max(0.0f, min_size);
+    const float clamped_max = std::max(clamped_min, max_size);
+    return clamped_min + (clamped_max - clamped_min) * clamp01(normalized_value);
 }
 } // namespace
 
@@ -71,9 +80,20 @@ void SpaceRockAnimation::update(float delta_time,
     ncplane_dim_yx(plane_, &plane_rows_, &plane_cols_);
 
     const float dt = std::max(delta_time, 0.0f);
+    const float target_size = compute_target_size_from_envelope(features.mid_envelope);
+
     if (!squares_.empty()) {
+        const float interpolation_rate = std::max(params_.size_interp_rate, 0.0f);
+        const float interpolation_step = std::clamp(interpolation_rate * dt, 0.0f, 1.0f);
         for (auto& square : squares_) {
             square.age += dt * params_.square_decay_rate;
+            square.target_size = target_size;
+            if (interpolation_rate <= 0.0f) {
+                square.size = square.target_size;
+            } else {
+                square.size += (square.target_size - square.size) * interpolation_step;
+            }
+            square.size = std::clamp(square.size, params_.min_size, params_.max_size);
         }
 
         squares_.erase(std::remove_if(squares_.begin(),
@@ -115,7 +135,7 @@ void SpaceRockAnimation::update(float delta_time,
                                 params_.spawn_strength_scale,
                                 features.beat_strength);
         if (spawn_count > 0) {
-            spawn_squares(spawn_count);
+            spawn_squares(spawn_count, features);
         }
     }
 
@@ -189,6 +209,11 @@ void SpaceRockAnimation::load_parameters_from_config(const AppConfig& config) {
         params_.square_decay_rate = std::max(0.0f, anim_config.space_rock_square_decay_rate);
         params_.max_squares_floor = std::max(0, anim_config.space_rock_max_squares_floor);
         params_.max_squares_scale = std::max(0.0f, anim_config.space_rock_max_squares_scale);
+        params_.min_size = std::max(0.0f, anim_config.space_rock_min_size);
+        params_.max_size = std::max(params_.min_size, anim_config.space_rock_max_size);
+        params_.mid_beat_size_multiplier =
+            std::max(0.0f, anim_config.space_rock_mid_beat_size_multiplier);
+        params_.size_interp_rate = std::max(0.0f, anim_config.space_rock_size_interp_rate);
         break;
     }
 }
@@ -290,17 +315,32 @@ void SpaceRockAnimation::render_square(const Square& square,
     }
 }
 
-void SpaceRockAnimation::spawn_squares(int count) {
+float SpaceRockAnimation::compute_spawn_size(const AudioFeatures& features) const {
+    const float base_size = compute_size_from_normalized(features.mid_energy_instantaneous,
+                                                         params_.min_size,
+                                                         params_.max_size);
+    const float size_multiplier = features.mid_beat ? params_.mid_beat_size_multiplier : 1.0f;
+    const float scaled_size = base_size * std::max(size_multiplier, 0.0f);
+    return std::clamp(scaled_size, params_.min_size, params_.max_size);
+}
+
+float SpaceRockAnimation::compute_target_size_from_envelope(float mid_envelope) const {
+    return compute_size_from_normalized(mid_envelope, params_.min_size, params_.max_size);
+}
+
+void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features) {
     if (count <= 0) {
         return;
     }
 
+    const float spawn_size = compute_spawn_size(features);
     std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
     for (int i = 0; i < count; ++i) {
         Square square{};
         square.x = distribution(rng_);
         square.y = distribution(rng_);
-        square.size = kDefaultSquareSize;
+        square.size = spawn_size;
+        square.target_size = spawn_size;
         square.age = 0.0f;
         square.lifespan = params_.square_lifespan_s;
         squares_.push_back(square);

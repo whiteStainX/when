@@ -16,6 +16,7 @@ public:
         float x = 0.0f;
         float y = 0.0f;
         float size = 0.0f;
+        float target_size = 0.0f;
         float velocity_x = 0.0f;
         float velocity_y = 0.0f;
         float age = 0.0f;
@@ -48,6 +49,10 @@ private:
         float square_decay_rate = 1.0f;
         int max_squares_floor = 12;
         float max_squares_scale = 36.0f;
+        float min_size = 0.1f;
+        float max_size = 0.35f;
+        float mid_beat_size_multiplier = 1.35f;
+        float size_interp_rate = 4.0f;
     };
 
     void load_parameters_from_config(const AppConfig& config);
@@ -58,7 +63,9 @@ private:
                        int interior_x,
                        int interior_height,
                        int interior_width);
-    void spawn_squares(int count);
+    void spawn_squares(int count, const AudioFeatures& features);
+    float compute_spawn_size(const AudioFeatures& features) const;
+    float compute_target_size_from_envelope(float mid_envelope) const;
 
     ncplane* plane_ = nullptr;
     int z_index_ = 0;
