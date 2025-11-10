@@ -18,6 +18,8 @@ public:
         float size = 0.0f;
         float velocity_x = 0.0f;
         float velocity_y = 0.0f;
+        float age = 0.0f;
+        float lifespan = 0.0f;
     };
 
     SpaceRockAnimation();
@@ -42,6 +44,10 @@ private:
     struct Parameters {
         int spawn_base_count = 3;
         float spawn_strength_scale = 4.0f;
+        float square_lifespan_s = 1.6f;
+        float square_decay_rate = 1.0f;
+        int max_squares_floor = 12;
+        float max_squares_scale = 36.0f;
     };
 
     void load_parameters_from_config(const AppConfig& config);

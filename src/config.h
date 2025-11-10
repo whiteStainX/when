@@ -97,6 +97,10 @@ struct AnimationConfig {
     float matrix_beat_threshold = 0.6f;  // Beat threshold for matrix animations
     int space_rock_spawn_base_count = 3; // Base number of squares to spawn per bass beat
     float space_rock_spawn_strength_scale = 4.0f; // Additional spawn scale driven by beat strength
+    float space_rock_square_lifespan_ms = 1600.0f; // Lifespan of a square in milliseconds
+    float space_rock_square_decay_rate = 1.0f;     // Rate multiplier for square aging
+    int space_rock_max_squares_floor = 12;         // Minimum number of active squares regardless of envelope
+    float space_rock_max_squares_scale = 36.0f;    // Additional squares allowed at full bass envelope
     float rain_angle_degrees = 0.0f;     // Angle for cyber rain drops (degrees, relative to vertical)
     float wave_speed_cols_per_s = 40.0f; // Sweep speed for lightning wave animations
     int wave_front_width_cols = 2;       // Width of the solid lightning front in columns
