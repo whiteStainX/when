@@ -16,6 +16,8 @@ constexpr float kMillisecondsToSeconds = 0.001f;
 // Approximate width-to-height ratio of a terminal cell so rendered geometry can remain
 // visually square even though cells are taller than they are wide.
 constexpr float kCellWidthToHeightRatio = 0.5f;
+constexpr std::uint8_t kDefaultSquareColor = 200u;
+constexpr std::uint8_t kFrameColor = 200u;
 
 int compute_spawn_count(int base_count, float strength_scale, float beat_strength) {
     const int clamped_base = std::max(base_count, 0);
@@ -330,22 +332,45 @@ void SpaceRockAnimation::draw_frame(int frame_y, int frame_x, int frame_height, 
     nccell hl = NCCELL_TRIVIAL_INITIALIZER;
     nccell vl = NCCELL_TRIVIAL_INITIALIZER;
 
-    nccell_load_char(plane_, &ul, '+');
-    nccell_load_char(plane_, &ur, '+');
-    nccell_load_char(plane_, &ll, '+');
-    nccell_load_char(plane_, &lr, '+');
-    nccell_load_char(plane_, &hl, '-');
-    nccell_load_char(plane_, &vl, '|');
+    auto cleanup_cells = [&]() {
+        nccell_release(plane_, &ul);
+        nccell_release(plane_, &ur);
+        nccell_release(plane_, &ll);
+        nccell_release(plane_, &lr);
+        nccell_release(plane_, &hl);
+        nccell_release(plane_, &vl);
+    };
+
+    auto load_cell = [&](nccell* cell, uint32_t glyph) -> bool {
+        if (nccell_load_ucs32(plane_, cell, glyph) <= 0) {
+            return false;
+        }
+        nccell_set_fg_rgb8(cell,
+                           static_cast<int>(kFrameColor),
+                           static_cast<int>(kFrameColor),
+                           static_cast<int>(kFrameColor));
+        nccell_set_bg_rgb8(cell,
+                           static_cast<int>(kFrameColor),
+                           static_cast<int>(kFrameColor),
+                           static_cast<int>(kFrameColor));
+        return true;
+    };
+
+    const bool loaded = load_cell(&ul, 0x250Cu) &&  // ┌
+                        load_cell(&ur, 0x2510u) &&  // ┐
+                        load_cell(&ll, 0x2514u) &&  // └
+                        load_cell(&lr, 0x2518u) &&  // ┘
+                        load_cell(&hl, 0x2500u) &&  // ─
+                        load_cell(&vl, 0x2502u);    // │
+    if (!loaded) {
+        cleanup_cells();
+        return;
+    }
 
     ncplane_cursor_move_yx(plane_, frame_y, frame_x);
     ncplane_box_sized(plane_, &ul, &ur, &ll, &lr, &hl, &vl, frame_height, frame_width, 0);
 
-    nccell_release(plane_, &ul);
-    nccell_release(plane_, &ur);
-    nccell_release(plane_, &ll);
-    nccell_release(plane_, &lr);
-    nccell_release(plane_, &hl);
-    nccell_release(plane_, &vl);
+    cleanup_cells();
 }
 
 void SpaceRockAnimation::render_square(const Square& square,
@@ -407,6 +432,14 @@ void SpaceRockAnimation::render_square(const Square& square,
     if (nccell_load_ucs32(plane_, &fill, kFullBlock) <= 0) {
         return;
     }
+    nccell_set_fg_rgb8(&fill,
+                       static_cast<int>(square.color_r),
+                       static_cast<int>(square.color_g),
+                       static_cast<int>(square.color_b));
+    nccell_set_bg_rgb8(&fill,
+                       static_cast<int>(square.color_r),
+                       static_cast<int>(square.color_g),
+                       static_cast<int>(square.color_b));
     for (int row = 0; row < square_height; ++row) {
         const int draw_y = top + row;
         if (draw_y < interior_y || draw_y >= interior_y + interior_height) {
@@ -457,6 +490,9 @@ void SpaceRockAnimation::spawn_squares(int count, const AudioFeatures& features)
         square.target_size = initial_size;
         square.age = 0.0f;
         square.lifespan = params_.square_lifespan_s;
+        square.color_r = kDefaultSquareColor;
+        square.color_g = kDefaultSquareColor;
+        square.color_b = kDefaultSquareColor;
         squares_.push_back(square);
     }
 }
