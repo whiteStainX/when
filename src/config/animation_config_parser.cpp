@@ -262,6 +262,13 @@ std::optional<AnimationConfig> parse_animation_config(
                       anim_config.space_rock_treble_size_scale);
     }
 
+    const auto space_rock_treble_spawn_threshold_it =
+        raw_anim_config.find("space_rock_treble_spawn_threshold");
+    if (space_rock_treble_spawn_threshold_it != raw_anim_config.end()) {
+        parse_float32(space_rock_treble_spawn_threshold_it->second.value,
+                      anim_config.space_rock_treble_spawn_threshold);
+    }
+
     const auto space_rock_low_band_min_y_it =
         raw_anim_config.find("space_rock_low_band_min_y");
     if (space_rock_low_band_min_y_it != raw_anim_config.end()) {

@@ -45,6 +45,9 @@ struct DspConfig {
     bool apply_a_weighting = true;
     bool enable_spectral_flatness = true;
     bool enable_chroma = true;
+    float bass_onset_sensitivity = 2.0f;
+    float mid_onset_sensitivity = 2.0f;
+    float treble_onset_sensitivity = 2.0f;
 };
 
 struct VisualConfig {
@@ -107,6 +110,7 @@ struct AnimationConfig {
     float space_rock_mid_beat_size_multiplier = 1.35f; // Size multiplier applied on mid-beat hits
     float space_rock_bass_size_scale = 1.5f;       // Max size multiplier when bass dominates
     float space_rock_treble_size_scale = 0.75f;    // Min size multiplier when treble dominates
+    float space_rock_treble_spawn_threshold = 0.4f; // Treble intensity needed before free spawns begin
     float space_rock_low_band_min_y = 0.55f;       // Lower bound for bass-dominant spawns
     float space_rock_low_band_max_y = 0.95f;       // Upper bound for bass-dominant spawns
     float space_rock_high_band_min_y = 0.05f;      // Lower bound for treble-dominant spawns

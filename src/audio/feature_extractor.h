@@ -28,6 +28,9 @@ public:
         float smoothing_release = 0.08f;
         float band_flux_smoothing = 0.08f;
         float band_onset_sensitivity = 2.0f;
+        float bass_onset_sensitivity = 2.0f;
+        float mid_onset_sensitivity = 2.0f;
+        float treble_onset_sensitivity = 2.0f;
         float band_onset_min_flux = 1e-4f;
         float global_onset_threshold = 1e-3f;
         float tempo_history_seconds = 4.0f;

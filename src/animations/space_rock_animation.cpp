@@ -142,9 +142,13 @@ void SpaceRockAnimation::update(float delta_time,
     const float dt = std::max(delta_time, 0.0f);
     const float target_size = compute_target_size_from_envelope(features.mid_envelope);
     const float treble_intensity = compute_treble_intensity(features);
+    const float spectral_centroid = clamp01(features.spectral_centroid);
     const float jitter_magnitude = treble_intensity * std::max(params_.max_jitter, 0.0f);
     const bool base_beat_triggered = features.beat_detected && !was_beat_detected_;
-    const bool treble_triggered = features.treble_beat || treble_intensity > 0.85f;
+    const bool treble_intense = treble_intensity > params_.treble_spawn_threshold;
+    const bool bright_centroid_trigger =
+        spectral_centroid > 0.65f && treble_intensity > params_.treble_spawn_threshold * 0.75f;
+    const bool treble_triggered = features.treble_beat || treble_intense || bright_centroid_trigger;
     const bool reposition_triggered = base_beat_triggered || treble_triggered;
     was_beat_detected_ = features.beat_detected;
 
@@ -262,10 +266,10 @@ void SpaceRockAnimation::update(float delta_time,
         }
     }
 
-    if (features.treble_beat || treble_intensity > 0.65f) {
+    if (treble_triggered) {
         const float treble_strength = features.treble_beat
                                           ? std::max(features.beat_strength, treble_intensity)
-                                          : treble_intensity;
+                                          : std::max(treble_intensity, spectral_centroid);
         const int treble_spawn = compute_spawn_count(0,
                                                      params_.spawn_strength_scale * 0.65f,
                                                      treble_strength);
@@ -375,6 +379,7 @@ void SpaceRockAnimation::load_parameters_from_config(const AppConfig& config) {
             std::max(0.0f, anim_config.space_rock_mid_beat_size_multiplier);
         params_.bass_size_scale = std::max(0.0f, anim_config.space_rock_bass_size_scale);
         params_.treble_size_scale = std::max(0.0f, anim_config.space_rock_treble_size_scale);
+        params_.treble_spawn_threshold = clamp01(anim_config.space_rock_treble_spawn_threshold);
         params_.low_band_min_y = clamp01(anim_config.space_rock_low_band_min_y);
         params_.low_band_max_y = clamp01(anim_config.space_rock_low_band_max_y);
         if (params_.low_band_max_y < params_.low_band_min_y) {

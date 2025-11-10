@@ -30,6 +30,9 @@ enable_flux = true
 apply_a_weighting = true
 enable_spectral_flatness = true
 enable_chroma = true
+bass_onset_sensitivity = 2.0
+mid_onset_sensitivity = 2.0
+treble_onset_sensitivity = 1.4
 
 [visual]
 target_fps = 60.0
@@ -70,7 +73,8 @@ space_rock_min_size = 0.08
 space_rock_max_size = 0.32
 space_rock_mid_beat_size_multiplier = 1.6
 space_rock_bass_size_scale = 3.2
-space_rock_treble_size_scale = 1
+space_rock_treble_size_scale = 0.5
+space_rock_treble_spawn_threshold = 0.1
 space_rock_low_band_min_y = 0.6
 space_rock_low_band_max_y = 0.95
 space_rock_high_band_min_y = 0.05
