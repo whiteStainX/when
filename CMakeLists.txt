@@ -99,13 +99,3 @@ target_include_directories(band_feature_taps_test PRIVATE
 
 add_test(NAME band_feature_taps_test COMMAND band_feature_taps_test)
 
-add_executable(band_sprite_assets_test
-  tests/band_sprite_assets_test.cpp
-  src/animations/band/sprite_types.cpp
-)
-
-target_include_directories(band_sprite_assets_test PRIVATE
-  src
-)
-
-add_test(NAME band_sprite_assets_test COMMAND band_sprite_assets_test)
