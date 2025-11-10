@@ -18,7 +18,8 @@ constexpr float kMillisecondsToSeconds = 0.001f;
 // visually square even though cells are taller than they are wide.
 constexpr float kCellWidthToHeightRatio = 0.5f;
 constexpr std::uint8_t kDefaultSquareColor = 200u;
-constexpr std::uint8_t kFrameColor = 200u;
+constexpr std::uint8_t kFrameForegroundColor = 255u;
+constexpr std::uint8_t kFrameBackgroundColor = 20u;
 
 int compute_spawn_count(int base_count, float strength_scale, float beat_strength) {
     const int clamped_base = std::max(base_count, 0);
@@ -390,13 +391,13 @@ void SpaceRockAnimation::draw_frame(int frame_y, int frame_x, int frame_height, 
             return false;
         }
         nccell_set_fg_rgb8(cell,
-                           static_cast<int>(kFrameColor),
-                           static_cast<int>(kFrameColor),
-                           static_cast<int>(kFrameColor));
+                           static_cast<int>(kFrameForegroundColor),
+                           static_cast<int>(kFrameForegroundColor),
+                           static_cast<int>(kFrameForegroundColor));
         nccell_set_bg_rgb8(cell,
-                           static_cast<int>(kFrameColor),
-                           static_cast<int>(kFrameColor),
-                           static_cast<int>(kFrameColor));
+                           static_cast<int>(kFrameBackgroundColor),
+                           static_cast<int>(kFrameBackgroundColor),
+                           static_cast<int>(kFrameBackgroundColor));
         return true;
     };
 
