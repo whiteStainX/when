@@ -95,6 +95,8 @@ struct AnimationConfig {
     std::string glyphs_file_path;        // Glyph file override for glyph-based animations
     float matrix_beat_boost = 1.5f;      // Beat multiplier for matrix animations
     float matrix_beat_threshold = 0.6f;  // Beat threshold for matrix animations
+    int space_rock_spawn_base_count = 3; // Base number of squares to spawn per bass beat
+    float space_rock_spawn_strength_scale = 4.0f; // Additional spawn scale driven by beat strength
     float rain_angle_degrees = 0.0f;     // Angle for cyber rain drops (degrees, relative to vertical)
     float wave_speed_cols_per_s = 40.0f; // Sweep speed for lightning wave animations
     int wave_front_width_cols = 2;       // Width of the solid lightning front in columns

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
+#include <random>
 #include <string>
 
 #include "animation_event_utils.h"
@@ -11,7 +13,18 @@ namespace animations {
 namespace {
 constexpr float kFrameFillRatio = 0.8f;
 constexpr float kDefaultSquareSize = 0.18f;
+
+int compute_spawn_count(int base_count, float strength_scale, float beat_strength) {
+    const int clamped_base = std::max(base_count, 0);
+    const float clamped_strength = std::max(beat_strength, 0.0f);
+    const int scaled = static_cast<int>(std::round(clamped_strength * strength_scale));
+    return clamped_base + std::max(scaled, 0);
+}
 } // namespace
+
+SpaceRockAnimation::SpaceRockAnimation()
+    : rng_(static_cast<std::mt19937::result_type>(
+          std::chrono::steady_clock::now().time_since_epoch().count())) {}
 
 SpaceRockAnimation::~SpaceRockAnimation() {
     if (plane_) {
@@ -28,29 +41,35 @@ void SpaceRockAnimation::init(notcurses* nc, const AppConfig& config) {
 
     z_index_ = 0;
     is_active_ = true;
+    params_ = Parameters{};
 
-    for (const auto& anim_config : config.animations) {
-        if (anim_config.type == "SpaceRock") {
-            z_index_ = anim_config.z_index;
-            is_active_ = anim_config.initially_active;
-            break;
-        }
-    }
+    load_parameters_from_config(config);
 
     plane_rows_ = 0;
     plane_cols_ = 0;
+    squares_.clear();
 
     create_or_resize_plane(nc, config);
 }
 
 void SpaceRockAnimation::update(float /*delta_time*/,
                                 const AudioMetrics& /*metrics*/,
-                                const AudioFeatures& /*features*/) {
+                                const AudioFeatures& features) {
     if (!plane_) {
         return;
     }
 
     ncplane_dim_yx(plane_, &plane_rows_, &plane_cols_);
+
+    if (features.bass_beat) {
+        const int spawn_count =
+            compute_spawn_count(params_.spawn_base_count,
+                                params_.spawn_strength_scale,
+                                features.beat_strength);
+        if (spawn_count > 0) {
+            spawn_squares(spawn_count);
+        }
+    }
 }
 
 void SpaceRockAnimation::render(notcurses* /*nc*/) {
@@ -81,16 +100,13 @@ void SpaceRockAnimation::render(notcurses* /*nc*/) {
         return;
     }
 
-    Square demo_square{};
-    demo_square.x = 0.5f;
-    demo_square.y = 0.5f;
-    demo_square.size = kDefaultSquareSize;
-
-    render_square(demo_square,
-                  frame_y + 1,
-                  frame_x + 1,
-                  interior_height,
-                  interior_width);
+    for (const auto& square : squares_) {
+        render_square(square,
+                      frame_y + 1,
+                      frame_x + 1,
+                      interior_height,
+                      interior_width);
+    }
 }
 
 void SpaceRockAnimation::activate() {
@@ -106,6 +122,20 @@ void SpaceRockAnimation::deactivate() {
 
 void SpaceRockAnimation::bind_events(const AnimationConfig& config, events::EventBus& bus) {
     bind_standard_frame_updates(this, config, bus);
+}
+
+void SpaceRockAnimation::load_parameters_from_config(const AppConfig& config) {
+    for (const auto& anim_config : config.animations) {
+        if (anim_config.type != "SpaceRock") {
+            continue;
+        }
+
+        z_index_ = anim_config.z_index;
+        is_active_ = anim_config.initially_active;
+        params_.spawn_base_count = anim_config.space_rock_spawn_base_count;
+        params_.spawn_strength_scale = anim_config.space_rock_spawn_strength_scale;
+        break;
+    }
 }
 
 void SpaceRockAnimation::create_or_resize_plane(notcurses* nc, const AppConfig& config) {
@@ -202,6 +232,21 @@ void SpaceRockAnimation::render_square(const Square& square,
             continue;
         }
         ncplane_putstr_yx(plane_, draw_y, left, row_pattern.c_str());
+    }
+}
+
+void SpaceRockAnimation::spawn_squares(int count) {
+    if (count <= 0) {
+        return;
+    }
+
+    std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
+    for (int i = 0; i < count; ++i) {
+        Square square{};
+        square.x = distribution(rng_);
+        square.y = distribution(rng_);
+        square.size = kDefaultSquareSize;
+        squares_.push_back(square);
     }
 }
 
