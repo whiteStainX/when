@@ -59,6 +59,7 @@ private:
                       int interior_height,
                       int interior_width);
     void spawn_particles(int count, bool heavy, float treble_envelope);
+    float compute_brightness(float age, float lifespan) const;
 
     ncplane* plane_ = nullptr;
     bool is_active_ = false;

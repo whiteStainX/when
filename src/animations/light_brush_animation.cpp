@@ -25,8 +25,6 @@ constexpr float kHeavyVelocityMin = 0.08f;
 constexpr float kHeavyVelocityMax = 0.18f;
 constexpr float kLightVelocityMin = 0.18f;
 constexpr float kLightVelocityMax = 0.35f;
-constexpr float kHeavySpawnStrengthScale = 3.0f;
-constexpr float kLightSpawnStrengthScale = 4.0f;
 constexpr float kHeavyLifespanMin = 1.1f;
 constexpr float kHeavyLifespanMax = 3.0f;
 constexpr float kLightLifespanMin = 0.6f;
@@ -103,8 +101,10 @@ void LightBrushAnimation::update(float delta_time,
 
     strokes_.erase(std::remove_if(strokes_.begin(),
                                   strokes_.end(),
-                                  [](const BrushStroke& stroke) {
-                                      return stroke.head.age >= stroke.head.lifespan;
+                                  [&](const BrushStroke& stroke) {
+                                      return compute_brightness(stroke.head.age,
+                                                                stroke.head.lifespan) <=
+                                             0.0f;
                                   }),
                    strokes_.end());
 
@@ -213,29 +213,22 @@ void LightBrushAnimation::update(float delta_time,
 
         const float trail_lifespan = std::max(particle.lifespan, 0.0f);
         while (!stroke.trail.empty()) {
-            const float trail_age = elapsed_time_ - stroke.trail.back().spawn_time;
-            if (trail_age <= trail_lifespan) {
+            const float trail_age = std::max(0.0f, elapsed_time_ - stroke.trail.back().spawn_time);
+            const float trail_brightness = compute_brightness(trail_age, trail_lifespan);
+            if (trail_brightness > 0.0f) {
                 break;
             }
             stroke.trail.pop_back();
         }
     }
 
-    const float clamped_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
-    const auto compute_spawn_count = [&](bool heavy) {
-        const float scale = heavy ? kHeavySpawnStrengthScale : kLightSpawnStrengthScale;
-        const int scaled = static_cast<int>(std::round(clamped_strength * scale));
-        return std::max(1, scaled);
-    };
-
-    const float clamped_treble = std::clamp(features.treble_envelope, 0.0f, 1.0f);
-
-    if (features.bass_beat) {
-        spawn_particles(compute_spawn_count(true), true, clamped_treble);
-    }
-
-    if (features.mid_beat) {
-        spawn_particles(compute_spawn_count(false), false, clamped_treble);
+    if (strokes_.empty()) {
+        const float clamped_treble = std::clamp(features.treble_envelope, 0.0f, 1.0f);
+        if (features.bass_beat) {
+            spawn_particles(1, true, clamped_treble);
+        } else if (features.mid_beat) {
+            spawn_particles(1, false, clamped_treble);
+        }
     }
 }
 
@@ -289,11 +282,15 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
 
     for (const auto& stroke : strokes_) {
         const float fade_duration = std::max(stroke.head.lifespan, 1.0e-3f);
+        const float stroke_brightness = compute_brightness(stroke.head.age, fade_duration);
+        if (stroke_brightness <= 0.0f) {
+            continue;
+        }
 
         for (auto it = stroke.trail.rbegin(); it != stroke.trail.rend(); ++it) {
             const float age = std::max(0.0f, elapsed_time_ - it->spawn_time);
-            const float normalized_age = std::clamp(age / fade_duration, 0.0f, 1.0f);
-            const float brightness = 1.0f - normalized_age;
+            const float point_fade = compute_brightness(age, fade_duration);
+            const float brightness = stroke_brightness * point_fade;
             if (brightness <= 0.0f) {
                 continue;
             }
@@ -314,9 +311,15 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
                          interior_width);
         }
 
+        const std::uint8_t head_intensity = static_cast<std::uint8_t>(
+            std::round(stroke_brightness * static_cast<float>(kParticleForegroundColor)));
+        if (head_intensity == 0u) {
+            continue;
+        }
+
         render_point(stroke.head.x,
                      stroke.head.y,
-                     kParticleForegroundColor,
+                     head_intensity,
                      frame_y,
                      frame_x,
                      interior_height,
@@ -465,10 +468,22 @@ void LightBrushAnimation::render_point(float normalized_x,
     nccell_release(plane_, &cell);
 }
 
+float LightBrushAnimation::compute_brightness(float age, float lifespan) const {
+    if (lifespan <= 1.0e-6f) {
+        return 0.0f;
+    }
+
+    const float normalized_age = std::clamp(age / lifespan, 0.0f, 1.0f);
+    const float eased = 1.0f - normalized_age;
+    return eased * eased;
+}
+
 void LightBrushAnimation::spawn_particles(int count, bool heavy, float treble_envelope) {
     if (count <= 0) {
         return;
     }
+
+    count = std::min(count, 1);
 
     std::uniform_real_distribution<float> position_dist(0.0f, 1.0f);
     std::uniform_real_distribution<float> angle_dist(0.0f, kTwoPi);
