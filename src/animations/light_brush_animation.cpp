@@ -61,7 +61,8 @@ void LightBrushAnimation::init(notcurses* nc, const AppConfig& config) {
     z_index_ = 0;
     plane_rows_ = 0;
     plane_cols_ = 0;
-    particles_.clear();
+    strokes_.clear();
+    elapsed_time_ = 0.0f;
 
     for (const auto& anim_config : config.animations) {
         if (anim_config.type == "LightBrush") {
@@ -81,6 +82,8 @@ void LightBrushAnimation::update(float delta_time,
         return;
     }
 
+    elapsed_time_ += delta_time;
+
     const float clamped_total_energy = std::clamp(features.total_energy, 0.0f, 1.0f);
     // Map the smoothed total energy into a speed multiplier. Quiet passages nudge
     // the scale toward kSpeedScaleMin while intense sections approach
@@ -94,16 +97,16 @@ void LightBrushAnimation::update(float delta_time,
     const float turbulence_strength = clamped_flatness * kTurbulenceBaseStrength * delta_time;
     std::uniform_real_distribution<float> turbulence_dist(-1.0f, 1.0f);
 
-    for (auto& particle : particles_) {
-        particle.age += delta_time;
+    for (auto& stroke : strokes_) {
+        stroke.head.age += delta_time;
     }
 
-    particles_.erase(std::remove_if(particles_.begin(),
-                                    particles_.end(),
-                                    [](const StrokeParticle& particle) {
-                                        return particle.age >= particle.lifespan;
-                                    }),
-                     particles_.end());
+    strokes_.erase(std::remove_if(strokes_.begin(),
+                                  strokes_.end(),
+                                  [](const BrushStroke& stroke) {
+                                      return stroke.head.age >= stroke.head.lifespan;
+                                  }),
+                   strokes_.end());
 
     std::array<std::pair<float, float>, kMaxAttractors> attractor_positions{};
     std::array<float, kMaxAttractors> attractor_weights{};
@@ -147,7 +150,8 @@ void LightBrushAnimation::update(float delta_time,
         }
     }
 
-    for (auto& particle : particles_) {
+    for (auto& stroke : strokes_) {
+        auto& particle = stroke.head;
         if (attractor_count > 0) {
             float nearest_distance_sq = std::numeric_limits<float>::max();
             std::pair<float, float> nearest_attractor{particle.x, particle.y};
@@ -204,6 +208,8 @@ void LightBrushAnimation::update(float delta_time,
 
         particle.x = std::clamp(particle.x, 0.0f, 1.0f);
         particle.y = std::clamp(particle.y, 0.0f, 1.0f);
+
+        stroke.trail.push_front(TrailPoint{particle.x, particle.y, elapsed_time_});
     }
 
     const float clamped_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
@@ -272,8 +278,8 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
         return;
     }
 
-    for (const auto& particle : particles_) {
-        render_particle(particle, frame_y, frame_x, interior_height, interior_width);
+    for (const auto& stroke : strokes_) {
+        render_particle(stroke.head, frame_y, frame_x, interior_height, interior_width);
     }
 }
 
@@ -430,22 +436,24 @@ void LightBrushAnimation::spawn_particles(int count, bool heavy, float treble_en
     std::uniform_real_distribution<float> speed_dist(min_speed, max_speed);
 
     for (int i = 0; i < count; ++i) {
-        StrokeParticle particle;
-        particle.x = position_dist(rng_);
-        particle.y = position_dist(rng_);
+        BrushStroke stroke;
+        stroke.head.x = position_dist(rng_);
+        stroke.head.y = position_dist(rng_);
 
         const float angle = angle_dist(rng_);
         const float speed = speed_dist(rng_);
-        particle.vx = std::cos(angle) * speed;
-        particle.vy = std::sin(angle) * speed;
-        particle.age = 0.0f;
+        stroke.head.vx = std::cos(angle) * speed;
+        stroke.head.vy = std::sin(angle) * speed;
+        stroke.head.age = 0.0f;
 
         const float lifespan_min = heavy ? kHeavyLifespanMin : kLightLifespanMin;
         const float lifespan_max = heavy ? kHeavyLifespanMax : kLightLifespanMax;
-        particle.lifespan =
+        stroke.head.lifespan =
             lifespan_min + (lifespan_max - lifespan_min) * std::clamp(treble_envelope, 0.0f, 1.0f);
 
-        particles_.push_back(particle);
+        stroke.trail.push_front(TrailPoint{stroke.head.x, stroke.head.y, elapsed_time_});
+
+        strokes_.push_back(std::move(stroke));
     }
 }
 

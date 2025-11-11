@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <random>
 #include <vector>
 
@@ -15,6 +16,18 @@ struct StrokeParticle {
     float vy = 0.0f;
     float age = 0.0f;
     float lifespan = 1.0f;
+};
+
+struct TrailPoint {
+    float x = 0.0f;
+    float y = 0.0f;
+    float spawn_time = 0.0f;
+};
+
+class BrushStroke {
+public:
+    StrokeParticle head;
+    std::deque<TrailPoint> trail;
 };
 
 class LightBrushAnimation : public Animation {
@@ -49,7 +62,8 @@ private:
     int z_index_ = 0;
     unsigned int plane_rows_ = 0;
     unsigned int plane_cols_ = 0;
-    std::vector<StrokeParticle> particles_;
+    std::vector<BrushStroke> strokes_;
+    float elapsed_time_ = 0.0f;
     std::mt19937 rng_;
 };
 
