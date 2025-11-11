@@ -28,6 +28,9 @@ constexpr float kHeavyLifespanMin = 1.1f;
 constexpr float kHeavyLifespanMax = 3.0f;
 constexpr float kLightLifespanMin = 0.6f;
 constexpr float kLightLifespanMax = 2.0f;
+constexpr float kSpeedScaleMin = 0.6f;
+constexpr float kSpeedScaleMax = 1.8f;
+constexpr float kTurbulenceBaseStrength = 0.45f;
 }
 
 LightBrushAnimation::LightBrushAnimation()
@@ -71,6 +74,19 @@ void LightBrushAnimation::update(float delta_time,
         return;
     }
 
+    const float clamped_total_energy = std::clamp(features.total_energy, 0.0f, 1.0f);
+    // Map the smoothed total energy into a speed multiplier. Quiet passages nudge
+    // the scale toward kSpeedScaleMin while intense sections approach
+    // kSpeedScaleMax.
+    const float speed_scale =
+        kSpeedScaleMin + (kSpeedScaleMax - kSpeedScaleMin) * clamped_total_energy;
+
+    const float clamped_flatness = std::clamp(features.spectral_flatness, 0.0f, 1.0f);
+    // Higher spectral flatness values (noisier textures) yield more turbulence,
+    // keeping tonal passages comparatively smooth.
+    const float turbulence_strength = clamped_flatness * kTurbulenceBaseStrength * delta_time;
+    std::uniform_real_distribution<float> turbulence_dist(-1.0f, 1.0f);
+
     for (auto& particle : particles_) {
         particle.age += delta_time;
     }
@@ -81,6 +97,35 @@ void LightBrushAnimation::update(float delta_time,
                                         return particle.age >= particle.lifespan;
                                     }),
                      particles_.end());
+
+    for (auto& particle : particles_) {
+        if (clamped_flatness > 0.0f) {
+            particle.vx += turbulence_dist(rng_) * turbulence_strength;
+            particle.vy += turbulence_dist(rng_) * turbulence_strength;
+        }
+
+        particle.x += particle.vx * delta_time * speed_scale;
+        particle.y += particle.vy * delta_time * speed_scale;
+
+        if (particle.x < 0.0f) {
+            particle.x = -particle.x;
+            particle.vx = std::abs(particle.vx);
+        } else if (particle.x > 1.0f) {
+            particle.x = 2.0f - particle.x;
+            particle.vx = -std::abs(particle.vx);
+        }
+
+        if (particle.y < 0.0f) {
+            particle.y = -particle.y;
+            particle.vy = std::abs(particle.vy);
+        } else if (particle.y > 1.0f) {
+            particle.y = 2.0f - particle.y;
+            particle.vy = -std::abs(particle.vy);
+        }
+
+        particle.x = std::clamp(particle.x, 0.0f, 1.0f);
+        particle.y = std::clamp(particle.y, 0.0f, 1.0f);
+    }
 
     const float clamped_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
     const auto compute_spawn_count = [&](bool heavy) {
