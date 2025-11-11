@@ -36,6 +36,12 @@ constexpr std::size_t kMaxAttractors = 3;
 constexpr float kAttractorRadius = 0.42f;
 constexpr float kSeekingStrength = 1.25f;
 constexpr float kAttractorEpsilon = 1.0e-3f;
+constexpr int kBrailleRowsPerCell = 4;
+constexpr int kBrailleColsPerCell = 2;
+constexpr float kThicknessMin = 0.35f;
+constexpr float kThicknessMax = 3.6f;
+constexpr float kThicknessSmoothing = 0.16f;
+constexpr float kThicknessRadiusScale = 1.35f;
 }
 
 LightBrushAnimation::LightBrushAnimation()
@@ -93,6 +99,9 @@ void LightBrushAnimation::update(float delta_time,
     // Higher spectral flatness values (noisier textures) yield more turbulence,
     // keeping tonal passages comparatively smooth.
     const float turbulence_strength = clamped_flatness * kTurbulenceBaseStrength * delta_time;
+    const float clamped_beat_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
+    const float tonal_weight = 0.6f + (1.0f - clamped_flatness) * 0.8f;
+    const float beat_weight = 0.5f + clamped_beat_strength * 1.5f;
     std::uniform_real_distribution<float> turbulence_dist(-1.0f, 1.0f);
 
     for (auto& stroke : strokes_) {
@@ -152,6 +161,11 @@ void LightBrushAnimation::update(float delta_time,
 
     for (auto& stroke : strokes_) {
         auto& particle = stroke.head;
+        const float thickness_target =
+            std::clamp(stroke.base_thickness * beat_weight * tonal_weight, kThicknessMin, kThicknessMax);
+        stroke.thickness += (thickness_target - stroke.thickness) * kThicknessSmoothing;
+        stroke.thickness = std::clamp(stroke.thickness, kThicknessMin, kThicknessMax);
+        particle.thickness = stroke.thickness;
         if (attractor_count > 0) {
             float nearest_distance_sq = std::numeric_limits<float>::max();
             std::pair<float, float> nearest_attractor{particle.x, particle.y};
@@ -209,7 +223,7 @@ void LightBrushAnimation::update(float delta_time,
         particle.x = std::clamp(particle.x, 0.0f, 1.0f);
         particle.y = std::clamp(particle.y, 0.0f, 1.0f);
 
-        stroke.trail.push_front(TrailPoint{particle.x, particle.y, elapsed_time_});
+        stroke.trail.push_front(TrailPoint{particle.x, particle.y, elapsed_time_, stroke.thickness});
 
         const float trail_lifespan = std::max(particle.lifespan, 0.0f);
         while (!stroke.trail.empty()) {
@@ -225,9 +239,9 @@ void LightBrushAnimation::update(float delta_time,
     if (strokes_.empty()) {
         const float clamped_treble = std::clamp(features.treble_envelope, 0.0f, 1.0f);
         if (features.bass_beat) {
-            spawn_particles(1, true, clamped_treble);
+            spawn_particles(1, true, clamped_treble, clamped_beat_strength, clamped_flatness);
         } else if (features.mid_beat) {
-            spawn_particles(1, false, clamped_treble);
+            spawn_particles(1, false, clamped_treble, clamped_beat_strength, clamped_flatness);
         }
     }
 }
@@ -280,6 +294,19 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
         return;
     }
 
+    const std::size_t cell_count =
+        static_cast<std::size_t>(interior_height) * static_cast<std::size_t>(interior_width);
+    braille_masks_.assign(cell_count, 0u);
+    braille_intensities_.assign(cell_count, 0.0f);
+
+    bool any_braille_samples = false;
+    struct FallbackSample {
+        float x = 0.5f;
+        float y = 0.5f;
+        float intensity = 0.0f;
+    };
+    FallbackSample strongest_sample;
+
     for (const auto& stroke : strokes_) {
         const float fade_duration = std::max(stroke.head.lifespan, 1.0e-3f);
         const float stroke_brightness = compute_brightness(stroke.head.age, fade_duration);
@@ -295,35 +322,99 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
                 continue;
             }
 
-            const std::uint8_t intensity = static_cast<std::uint8_t>(
-                std::round(brightness * static_cast<float>(kParticleForegroundColor)));
-
-            if (intensity == 0u) {
+            const float point_thickness = std::max(it->thickness * brightness, 0.0f);
+            if (point_thickness <= 0.0f) {
                 continue;
             }
 
-            render_point(it->x,
-                         it->y,
-                         intensity,
-                         frame_y,
-                         frame_x,
-                         interior_height,
-                         interior_width);
+            any_braille_samples |= render_point(it->x,
+                                                it->y,
+                                                brightness,
+                                                point_thickness,
+                                                frame_y,
+                                                frame_x,
+                                                interior_height,
+                                                interior_width);
+
+            if (brightness > strongest_sample.intensity) {
+                strongest_sample = {it->x, it->y, brightness};
+            }
         }
 
-        const std::uint8_t head_intensity = static_cast<std::uint8_t>(
-            std::round(stroke_brightness * static_cast<float>(kParticleForegroundColor)));
-        if (head_intensity == 0u) {
+        const float head_thickness = std::max(stroke.thickness * stroke_brightness, 0.0f);
+        if (head_thickness <= 0.0f) {
             continue;
         }
 
-        render_point(stroke.head.x,
-                     stroke.head.y,
-                     head_intensity,
-                     frame_y,
-                     frame_x,
-                     interior_height,
-                     interior_width);
+        any_braille_samples |= render_point(stroke.head.x,
+                                            stroke.head.y,
+                                            stroke_brightness,
+                                            head_thickness,
+                                            frame_y,
+                                            frame_x,
+                                            interior_height,
+                                            interior_width);
+
+        if (stroke_brightness > strongest_sample.intensity) {
+            strongest_sample = {stroke.head.x, stroke.head.y, stroke_brightness};
+        }
+    }
+
+    if (!any_braille_samples && strongest_sample.intensity > 0.0f) {
+        const float clamped_x = std::clamp(strongest_sample.x, 0.0f, 1.0f);
+        const float clamped_y = std::clamp(strongest_sample.y, 0.0f, 1.0f);
+        const int y = frame_y + 1 +
+                      static_cast<int>(std::round(clamped_y * std::max(0, interior_height - 1)));
+        const int x = frame_x + 1 +
+                      static_cast<int>(std::round(clamped_x * std::max(0, interior_width - 1)));
+
+        nccell cell = NCCELL_TRIVIAL_INITIALIZER;
+        if (nccell_load_ucs32(plane_, &cell, 0x2588u) > 0) {
+            const int color = static_cast<int>(
+                std::round(std::clamp(strongest_sample.intensity, 0.0f, 1.0f) *
+                           static_cast<float>(kParticleForegroundColor)));
+            nccell_set_fg_rgb8(&cell, color, color, color);
+            nccell_set_bg_rgb8(&cell,
+                               static_cast<int>(kParticleBackgroundColor),
+                               static_cast<int>(kParticleBackgroundColor),
+                               static_cast<int>(kParticleBackgroundColor));
+            ncplane_putc_yx(plane_, y, x, &cell);
+            nccell_release(plane_, &cell);
+        }
+    }
+
+    for (int row = 0; row < interior_height; ++row) {
+        for (int col = 0; col < interior_width; ++col) {
+            const std::size_t index =
+                static_cast<std::size_t>(row) * static_cast<std::size_t>(interior_width) +
+                static_cast<std::size_t>(col);
+            if (index >= braille_masks_.size() || index >= braille_intensities_.size()) {
+                continue;
+            }
+
+            const std::uint8_t mask = braille_masks_[index];
+            const float intensity = braille_intensities_[index];
+            if (mask == 0u || intensity <= 0.0f) {
+                continue;
+            }
+
+            nccell cell = NCCELL_TRIVIAL_INITIALIZER;
+            const uint32_t glyph = 0x2800u + static_cast<uint32_t>(mask);
+            if (nccell_load_ucs32(plane_, &cell, glyph) <= 0) {
+                continue;
+            }
+
+            const int color = static_cast<int>(std::round(
+                std::clamp(intensity, 0.0f, 1.0f) * static_cast<float>(kParticleForegroundColor)));
+            nccell_set_fg_rgb8(&cell, color, color, color);
+            nccell_set_bg_rgb8(&cell,
+                               static_cast<int>(kParticleBackgroundColor),
+                               static_cast<int>(kParticleBackgroundColor),
+                               static_cast<int>(kParticleBackgroundColor));
+
+            ncplane_putc_yx(plane_, frame_y + 1 + row, frame_x + 1 + col, &cell);
+            nccell_release(plane_, &cell);
+        }
     }
 }
 
@@ -435,37 +526,82 @@ void LightBrushAnimation::draw_frame(int frame_y, int frame_x, int frame_height,
     cleanup_cells();
 }
 
-void LightBrushAnimation::render_point(float normalized_x,
+bool LightBrushAnimation::render_point(float normalized_x,
                                        float normalized_y,
-                                       std::uint8_t intensity,
+                                       float brightness,
+                                       float thickness,
                                        int frame_y,
                                        int frame_x,
                                        int interior_height,
                                        int interior_width) {
-    if (!plane_ || interior_height <= 0 || interior_width <= 0 || intensity == 0u) {
-        return;
+    (void)frame_y;
+    (void)frame_x;
+    if (!plane_ || interior_height <= 0 || interior_width <= 0 || brightness <= 0.0f || thickness <= 0.0f) {
+        return false;
     }
 
     const float clamped_x = std::clamp(normalized_x, 0.0f, 1.0f);
     const float clamped_y = std::clamp(normalized_y, 0.0f, 1.0f);
 
-    const int y = frame_y + 1 + static_cast<int>(std::round(clamped_y * std::max(0, interior_height - 1)));
-    const int x = frame_x + 1 + static_cast<int>(std::round(clamped_x * std::max(0, interior_width - 1)));
-
-    nccell cell = NCCELL_TRIVIAL_INITIALIZER;
-    if (nccell_load_ucs32(plane_, &cell, 0x2588u) <= 0) { // Full block character
-        return;
+    const int subcols = interior_width * kBrailleColsPerCell;
+    const int subrows = interior_height * kBrailleRowsPerCell;
+    if (subcols <= 0 || subrows <= 0) {
+        return false;
     }
 
-    const int color = static_cast<int>(intensity);
-    nccell_set_fg_rgb8(&cell, color, color, color);
-    nccell_set_bg_rgb8(&cell,
-                       static_cast<int>(kParticleBackgroundColor),
-                       static_cast<int>(kParticleBackgroundColor),
-                       static_cast<int>(kParticleBackgroundColor));
+    const float center_subx = clamped_x * (static_cast<float>(subcols) - 1.0f);
+    const float center_suby = clamped_y * (static_cast<float>(subrows) - 1.0f);
+    const float radius = std::max(thickness * kThicknessRadiusScale, 0.1f);
 
-    ncplane_putc_yx(plane_, y, x, &cell);
-    nccell_release(plane_, &cell);
+    const int min_subx = std::max(0, static_cast<int>(std::floor(center_subx - radius)));
+    const int max_subx = std::min(subcols - 1, static_cast<int>(std::ceil(center_subx + radius)));
+    const int min_suby = std::max(0, static_cast<int>(std::floor(center_suby - radius)));
+    const int max_suby = std::min(subrows - 1, static_cast<int>(std::ceil(center_suby + radius)));
+
+    if (braille_masks_.empty() || braille_intensities_.empty()) {
+        return false;
+    }
+
+    static constexpr std::uint8_t kBrailleMask[kBrailleRowsPerCell][kBrailleColsPerCell] = {
+        {0x01u, 0x08u},
+        {0x02u, 0x10u},
+        {0x04u, 0x20u},
+        {0x40u, 0x80u},
+    };
+
+    bool wrote_sample = false;
+    for (int suby = min_suby; suby <= max_suby; ++suby) {
+        const float dy = static_cast<float>(suby) - center_suby;
+        for (int subx = min_subx; subx <= max_subx; ++subx) {
+            const float dx = static_cast<float>(subx) - center_subx;
+            const float distance = std::sqrt(dx * dx + dy * dy);
+            if (distance > radius) {
+                continue;
+            }
+
+            const float normalized = 1.0f - std::clamp(distance / radius, 0.0f, 1.0f);
+            const float sample_intensity = brightness * normalized * normalized;
+            if (sample_intensity <= 0.0f) {
+                continue;
+            }
+
+            const int cell_row = std::clamp(suby / kBrailleRowsPerCell, 0, interior_height - 1);
+            const int cell_col = std::clamp(subx / kBrailleColsPerCell, 0, interior_width - 1);
+            const int dot_row = suby % kBrailleRowsPerCell;
+            const int dot_col = subx % kBrailleColsPerCell;
+            const std::size_t index =
+                static_cast<std::size_t>(cell_row) * static_cast<std::size_t>(interior_width) +
+                static_cast<std::size_t>(cell_col);
+            if (index >= braille_masks_.size() || index >= braille_intensities_.size()) {
+                continue;
+            }
+
+            braille_masks_[index] |= kBrailleMask[dot_row][dot_col];
+            braille_intensities_[index] = std::max(braille_intensities_[index], sample_intensity);
+            wrote_sample = true;
+        }
+    }
+    return wrote_sample;
 }
 
 float LightBrushAnimation::compute_brightness(float age, float lifespan) const {
@@ -478,7 +614,11 @@ float LightBrushAnimation::compute_brightness(float age, float lifespan) const {
     return eased * eased;
 }
 
-void LightBrushAnimation::spawn_particles(int count, bool heavy, float treble_envelope) {
+void LightBrushAnimation::spawn_particles(int count,
+                                          bool heavy,
+                                          float treble_envelope,
+                                          float beat_strength,
+                                          float spectral_flatness) {
     if (count <= 0) {
         return;
     }
@@ -507,7 +647,16 @@ void LightBrushAnimation::spawn_particles(int count, bool heavy, float treble_en
         stroke.head.lifespan =
             lifespan_min + (lifespan_max - lifespan_min) * std::clamp(treble_envelope, 0.0f, 1.0f);
 
-        stroke.trail.push_front(TrailPoint{stroke.head.x, stroke.head.y, elapsed_time_});
+        const float clamped_beat = std::clamp(beat_strength, 0.0f, 1.0f);
+        const float tonal_presence = 1.0f - std::clamp(spectral_flatness, 0.0f, 1.0f);
+        const float heavy_bias = heavy ? 1.25f : 0.9f;
+        float base_thickness = heavy_bias * (0.5f + clamped_beat * 1.6f) * (0.6f + tonal_presence * 0.8f);
+        base_thickness = std::clamp(base_thickness, kThicknessMin, kThicknessMax);
+        stroke.base_thickness = base_thickness;
+        stroke.thickness = base_thickness;
+        stroke.head.thickness = base_thickness;
+
+        stroke.trail.push_front(TrailPoint{stroke.head.x, stroke.head.y, elapsed_time_, base_thickness});
 
         const float trail_lifespan = std::max(stroke.head.lifespan, 0.0f);
         while (!stroke.trail.empty()) {

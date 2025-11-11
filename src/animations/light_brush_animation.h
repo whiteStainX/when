@@ -17,18 +17,22 @@ struct StrokeParticle {
     float vy = 0.0f;
     float age = 0.0f;
     float lifespan = 1.0f;
+    float thickness = 1.0f;
 };
 
 struct TrailPoint {
     float x = 0.0f;
     float y = 0.0f;
     float spawn_time = 0.0f;
+    float thickness = 1.0f;
 };
 
 class BrushStroke {
 public:
     StrokeParticle head;
     std::deque<TrailPoint> trail;
+    float base_thickness = 1.0f;
+    float thickness = 1.0f;
 };
 
 class LightBrushAnimation : public Animation {
@@ -51,14 +55,19 @@ public:
 private:
     void create_or_resize_plane(notcurses* nc);
     void draw_frame(int frame_y, int frame_x, int frame_height, int frame_width);
-    void render_point(float normalized_x,
+    bool render_point(float normalized_x,
                       float normalized_y,
-                      std::uint8_t intensity,
+                      float brightness,
+                      float thickness,
                       int frame_y,
                       int frame_x,
                       int interior_height,
                       int interior_width);
-    void spawn_particles(int count, bool heavy, float treble_envelope);
+    void spawn_particles(int count,
+                         bool heavy,
+                         float treble_envelope,
+                         float beat_strength,
+                         float spectral_flatness);
     float compute_brightness(float age, float lifespan) const;
 
     ncplane* plane_ = nullptr;
@@ -69,6 +78,8 @@ private:
     std::vector<BrushStroke> strokes_;
     float elapsed_time_ = 0.0f;
     std::mt19937 rng_;
+    std::vector<std::uint8_t> braille_masks_;
+    std::vector<float> braille_intensities_;
 };
 
 } // namespace animations
