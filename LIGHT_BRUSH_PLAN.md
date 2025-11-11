@@ -119,8 +119,8 @@ The animation will be contained within a continuous frame, similar to the `Space
   1.  Update `LightBrushAnimation::update` so the animation maintains at most one active `BrushStroke` at a time. Reuse the existing stroke while it is fading instead of spawning new ones indiscriminately.
   2.  Replace the hard cut-off removal with brightness-based fading. Keep the stroke alive until its computed brightness reaches zero, and drive this brightness from a time-based fade curve (e.g., exponential or eased polynomial) tied to `stroke.head.age / stroke.head.lifespan`.
   3.  Adjust the trail update logic so both the head and tail apply the same fade curve, allowing the visible stroke to dissipate gracefully rather than disappearing abruptly.
-  4.  Gate new stroke creation on the previous stroke’s fade completion. Once the brightness reaches zero, spawn a fresh stroke based on the next rhythm cue to preserve the “one artist stroke at a time” aesthetic.
-  5.  Validate by stepping through an audio-driven run and confirming that a new stroke is never generated until the current stroke has fully faded from the canvas.
+4.  Gate new stroke creation on the previous stroke’s fade completion. Once the brightness reaches zero, spawn a fresh stroke based on the next rhythm cue to preserve the “one artist stroke at a time” aesthetic. Flag this gating logic in the implementation notes so it can be relaxed in Phase 5 when multi-stroke layering arrives.
+5.  Validate by stepping through an audio-driven run and confirming that a new stroke is never generated until the current stroke has fully faded from the canvas. Annotate the validation checklist to remind implementers that Phase 5 will introduce a stroke pool that supersedes this single-stroke guard.
 
 ### Step 4.2: Introduce Braille-Based Organic Thickness
 
@@ -138,16 +138,16 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 5.1: Expand Stroke Lifecycle Controls
 
-1.  Refactor the lifecycle manager so it tracks a configurable maximum stroke count (start with 3–5) instead of a single active stroke. Use a lightweight pool or ring buffer so new spawns recycle the oldest fully faded stroke.
+1.  Refactor the lifecycle manager so it tracks a configurable maximum stroke count (start with 3–5) instead of a single active stroke. Replace the Phase 4 fade-completion gate with per-stroke fade tracking so multiple strokes can coexist; use a lightweight pool or ring buffer so new spawns recycle the oldest fully faded stroke without reviving ones still visible.
 2.  Introduce per-stroke `lifecycle_profile` data that stores lifespan ranges, fade curves, and persistence multipliers. Seed these parameters from `features.treble_envelope`, `features.total_energy`, and a dash of randomness so each stroke feels unique.
 3.  Implement staggered fade logic: allow a stroke to remain visible beyond its nominal lifespan by blending its brightness with a long tail curve (e.g., exponential with adjustable decay). Ensure the stroke only exits once both head and trail brightness values fall below a perceptual threshold.
 
 ### Step 5.2: Layer-Friendly Rendering Pipeline
 
 1.  Update the rendering loop to sort strokes by age or dynamic intensity so younger, brighter strokes naturally sit "above" older ones when composited on the `ncplane`. Confirm the chosen order preserves visual clarity without introducing flicker.
-2.  Enhance the Braille painter to support additive color/intensity blending. Consider maintaining an off-screen accumulation buffer (e.g., per-cell RGBA or brightness) so overlapping samples compound instead of simply overwriting each other.
-3.  Add configurable blend modes (additive, screen, soft-light) and map them to musical cues—e.g., use a more aggressive additive blend during choruses when `features.total_energy` spikes.
-4.  Benchmark render cost with multiple overlapping strokes to ensure frame times stay within target; if necessary, cap trail length dynamically based on `delta_time`.
+2.  Enhance the Braille painter to support additive color/intensity blending. Consider maintaining an off-screen accumulation buffer (e.g., per-cell RGBA or brightness) so overlapping samples compound instead of simply overwriting each other, and note the expected terminal color depth (true color vs. 256-color) to guide palette precision.
+3.  Add configurable blend modes (additive, screen, soft-light) and map them to musical cues—e.g., use a more aggressive additive blend during choruses when `features.total_energy` spikes. Document a graceful fallback (such as per-cell brightness clamping with single-pass compositing) for environments where the accumulation buffer or higher blend modes prove too costly.
+4.  Benchmark render cost with multiple overlapping strokes to ensure frame times stay within target; if necessary, cap trail length dynamically based on `delta_time`. Include guidance on profiling both the full accumulation path and the fallback so implementers can decide which pipeline fits their performance budget.
 
 ### Step 5.3: Expressive Variability in Stroke Geometry
 
@@ -157,7 +157,7 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 5.4: Adaptive Population Management
 
-1.  Build a population controller that monitors canvas "busyness" using metrics such as average brightness per cell or active trail sample count. Use this feedback to throttle spawning when the canvas feels overcrowded or boost it when space opens up.
+1.  Build a population controller that monitors canvas "busyness" using metrics such as average brightness per cell or active trail sample count. Maintain running aggregates (e.g., update brightness totals as strokes draw and fade) so the controller avoids full-canvas scans each frame, and smooth the metrics with exponential moving averages or hysteresis thresholds to prevent flicker.
 2.  Mix rhythmic and freeform spawning: continue to key off `bass_beat`/`mid_beat`, but add a background drift of low-intensity strokes triggered by spectral flux or random timers so the canvas never goes silent between beats.
-3.  Allow advanced scenes where strokes of different profiles coexist—e.g., lingering "wash" strokes with very long fade curves alongside punchy, short-lived accents. Document representative parameter presets so implementers can tune the vibe quickly.
-4.  Validate through extended listening sessions across genres (ambient, techno, jazz). Confirm that the controller keeps the canvas alive without overwhelming it, and that overlapping strokes evolve at different cadences.
+3.  Allow advanced scenes where strokes of different profiles coexist—e.g., lingering "wash" strokes with very long fade curves alongside punchy, short-lived accents. Document representative parameter presets (for example, 0.6–0.8 EMA smoothing factors, 10–15% hysteresis bands, and stroke-count ceilings tied to tempo ranges) so implementers can tune the vibe quickly.
+4.  Validate through extended listening sessions across genres (ambient, techno, jazz). Confirm that the controller keeps the canvas alive without overwhelming it, that the smoothed metrics stay stable, and that overlapping strokes evolve at different cadences.
