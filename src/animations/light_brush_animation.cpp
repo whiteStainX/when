@@ -1,10 +1,13 @@
 #include "light_brush_animation.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <random>
+#include <utility>
 
 #include "animation_event_utils.h"
 
@@ -31,6 +34,10 @@ constexpr float kLightLifespanMax = 2.0f;
 constexpr float kSpeedScaleMin = 0.6f;
 constexpr float kSpeedScaleMax = 1.8f;
 constexpr float kTurbulenceBaseStrength = 0.45f;
+constexpr std::size_t kMaxAttractors = 3;
+constexpr float kAttractorRadius = 0.42f;
+constexpr float kSeekingStrength = 1.25f;
+constexpr float kAttractorEpsilon = 1.0e-3f;
 }
 
 LightBrushAnimation::LightBrushAnimation()
@@ -98,7 +105,79 @@ void LightBrushAnimation::update(float delta_time,
                                     }),
                      particles_.end());
 
+    std::array<std::pair<float, float>, kMaxAttractors> attractor_positions{};
+    std::array<float, kMaxAttractors> attractor_weights{};
+    std::size_t attractor_count = 0;
+
+    if (features.chroma_available) {
+        std::array<std::pair<float, int>, 12> note_strengths{};
+        for (int i = 0; i < 12; ++i) {
+            note_strengths[i] = {features.chroma[i], i};
+        }
+
+        std::sort(note_strengths.begin(),
+                  note_strengths.end(),
+                  [](const auto& lhs, const auto& rhs) {
+                      return lhs.first > rhs.first;
+                  });
+
+        const float strongest = note_strengths.front().first;
+        if (strongest > 0.0f) {
+            for (const auto& [strength, note_index] : note_strengths) {
+                if (strength <= 0.0f) {
+                    break;
+                }
+
+                const float angle =
+                    (static_cast<float>(note_index) / 12.0f) * kTwoPi;
+                const float strength_scale = strength / strongest;
+
+                const float x = 0.5f + std::cos(angle) * kAttractorRadius;
+                const float y = 0.5f + std::sin(angle) * kAttractorRadius;
+
+                attractor_positions[attractor_count] =
+                    {std::clamp(x, 0.0f, 1.0f), std::clamp(y, 0.0f, 1.0f)};
+                attractor_weights[attractor_count] = strength_scale;
+                ++attractor_count;
+
+                if (attractor_count >= kMaxAttractors) {
+                    break;
+                }
+            }
+        }
+    }
+
     for (auto& particle : particles_) {
+        if (attractor_count > 0) {
+            float nearest_distance_sq = std::numeric_limits<float>::max();
+            std::pair<float, float> nearest_attractor{particle.x, particle.y};
+            float nearest_weight = 1.0f;
+
+            for (std::size_t i = 0; i < attractor_count; ++i) {
+                const float dx = attractor_positions[i].first - particle.x;
+                const float dy = attractor_positions[i].second - particle.y;
+                const float distance_sq = dx * dx + dy * dy;
+
+                if (distance_sq < nearest_distance_sq) {
+                    nearest_distance_sq = distance_sq;
+                    nearest_attractor = attractor_positions[i];
+                    nearest_weight = std::max(attractor_weights[i], 0.1f);
+                }
+            }
+
+            if (nearest_distance_sq > 0.0f) {
+                const float dx = nearest_attractor.first - particle.x;
+                const float dy = nearest_attractor.second - particle.y;
+                const float distance =
+                    std::sqrt(std::max(nearest_distance_sq, kAttractorEpsilon));
+                const float scale =
+                    (kSeekingStrength * nearest_weight * delta_time) /
+                    (distance + kAttractorEpsilon);
+                particle.vx += dx * scale;
+                particle.vy += dy * scale;
+            }
+        }
+
         if (clamped_flatness > 0.0f) {
             particle.vx += turbulence_dist(rng_) * turbulence_strength;
             particle.vy += turbulence_dist(rng_) * turbulence_strength;
