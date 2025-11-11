@@ -1,5 +1,6 @@
 #pragma once
 
+#include <random>
 #include <vector>
 
 #include "animation.h"
@@ -41,6 +42,7 @@ private:
                          int frame_x,
                          int interior_height,
                          int interior_width);
+    void spawn_particles(int count, bool heavy);
 
     ncplane* plane_ = nullptr;
     bool is_active_ = false;
@@ -48,6 +50,7 @@ private:
     unsigned int plane_rows_ = 0;
     unsigned int plane_cols_ = 0;
     std::vector<StrokeParticle> particles_;
+    std::mt19937 rng_;
 };
 
 } // namespace animations

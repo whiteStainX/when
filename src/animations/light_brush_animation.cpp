@@ -1,8 +1,10 @@
 #include "light_brush_animation.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <random>
 
 #include "animation_event_utils.h"
 
@@ -15,9 +17,18 @@ constexpr std::uint8_t kFrameForegroundColor = 240u;
 constexpr std::uint8_t kFrameBackgroundColor = 18u;
 constexpr std::uint8_t kParticleForegroundColor = 255u;
 constexpr std::uint8_t kParticleBackgroundColor = 0u;
+constexpr float kTwoPi = 6.28318530718f;
+constexpr float kHeavyVelocityMin = 0.08f;
+constexpr float kHeavyVelocityMax = 0.18f;
+constexpr float kLightVelocityMin = 0.18f;
+constexpr float kLightVelocityMax = 0.35f;
+constexpr float kHeavySpawnStrengthScale = 3.0f;
+constexpr float kLightSpawnStrengthScale = 4.0f;
 }
 
-LightBrushAnimation::LightBrushAnimation() = default;
+LightBrushAnimation::LightBrushAnimation()
+    : rng_(static_cast<std::mt19937::result_type>(
+          std::chrono::steady_clock::now().time_since_epoch().count())) {}
 
 LightBrushAnimation::~LightBrushAnimation() {
     if (plane_) {
@@ -37,7 +48,6 @@ void LightBrushAnimation::init(notcurses* nc, const AppConfig& config) {
     plane_rows_ = 0;
     plane_cols_ = 0;
     particles_.clear();
-    particles_.push_back(StrokeParticle{});
 
     for (const auto& anim_config : config.animations) {
         if (anim_config.type == "LightBrush") {
@@ -52,8 +62,25 @@ void LightBrushAnimation::init(notcurses* nc, const AppConfig& config) {
 
 void LightBrushAnimation::update(float /*delta_time*/,
                                  const AudioMetrics& /*metrics*/,
-                                 const AudioFeatures& /*features*/) {
-    // Placeholder: Phase 0 only keeps particles static.
+                                 const AudioFeatures& features) {
+    if (!is_active_) {
+        return;
+    }
+
+    const float clamped_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
+    const auto compute_spawn_count = [&](bool heavy) {
+        const float scale = heavy ? kHeavySpawnStrengthScale : kLightSpawnStrengthScale;
+        const int scaled = static_cast<int>(std::round(clamped_strength * scale));
+        return std::max(1, scaled);
+    };
+
+    if (features.bass_beat) {
+        spawn_particles(compute_spawn_count(true), true);
+    }
+
+    if (features.mid_beat) {
+        spawn_particles(compute_spawn_count(false), false);
+    }
 }
 
 void LightBrushAnimation::render(notcurses* /*nc*/) {
@@ -104,11 +131,9 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
         return;
     }
 
-    if (particles_.empty()) {
-        particles_.push_back(StrokeParticle{});
+    for (const auto& particle : particles_) {
+        render_particle(particle, frame_y, frame_x, interior_height, interior_width);
     }
-
-    render_particle(particles_.front(), frame_y, frame_x, interior_height, interior_width);
 }
 
 void LightBrushAnimation::activate() {
@@ -250,6 +275,33 @@ void LightBrushAnimation::render_particle(const StrokeParticle& particle,
 
     ncplane_putc_yx(plane_, y, x, &cell);
     nccell_release(plane_, &cell);
+}
+
+void LightBrushAnimation::spawn_particles(int count, bool heavy) {
+    if (count <= 0) {
+        return;
+    }
+
+    std::uniform_real_distribution<float> position_dist(0.0f, 1.0f);
+    std::uniform_real_distribution<float> angle_dist(0.0f, kTwoPi);
+    const float min_speed = heavy ? kHeavyVelocityMin : kLightVelocityMin;
+    const float max_speed = heavy ? kHeavyVelocityMax : kLightVelocityMax;
+    std::uniform_real_distribution<float> speed_dist(min_speed, max_speed);
+
+    for (int i = 0; i < count; ++i) {
+        StrokeParticle particle;
+        particle.x = position_dist(rng_);
+        particle.y = position_dist(rng_);
+
+        const float angle = angle_dist(rng_);
+        const float speed = speed_dist(rng_);
+        particle.vx = std::cos(angle) * speed;
+        particle.vy = std::sin(angle) * speed;
+        particle.age = 0.0f;
+        particle.lifespan = heavy ? 1.5f : 1.0f;
+
+        particles_.push_back(particle);
+    }
 }
 
 } // namespace animations
