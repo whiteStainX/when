@@ -107,3 +107,26 @@ The animation will be contained within a continuous frame, similar to the `Space
     4.  Map this age to a brightness/color value. A point that was just created should be bright, and it should fade to black as it approaches its lifespan (which is controlled by `treble_envelope`).
     5.  Draw the character for the trail point with this calculated color. Overlapping strokes will naturally blend as their colors are drawn on top of each other.
 -   **Validation:** The moving particles now leave beautiful, fading trails behind them, creating the final "abstract painting" effect. The length and brightness of these trails are controlled by the music.
+
+## Phase 4: Expressive Single-Stroke Presentation
+
+**Goal:** Rework the spawning, fading, and rendering rules so the canvas always features a single, expressive brush stroke that lingers and fades organically with the music.
+
+### Step 4.1: Enforce Single-Stroke Lifecycle with Smooth Fading
+
+-   **Logic:**
+    1.  Update `LightBrushAnimation::update` so the animation maintains at most one active `BrushStroke` at a time. Reuse the existing stroke while it is fading instead of spawning new ones indiscriminately.
+    2.  Replace the hard cut-off removal with brightness-based fading. Keep the stroke alive until its computed brightness reaches zero, and drive this brightness from a time-based fade curve (e.g., exponential or eased polynomial) tied to `stroke.head.age / stroke.head.lifespan`.
+    3.  Adjust the trail update logic so both the head and tail apply the same fade curve, allowing the visible stroke to dissipate gracefully rather than disappearing abruptly.
+    4.  Gate new stroke creation on the previous stroke’s fade completion. Once the brightness reaches zero, spawn a fresh stroke based on the next rhythm cue to preserve the “one artist stroke at a time” aesthetic.
+    5.  Validate by stepping through an audio-driven run and confirming that a new stroke is never generated until the current stroke has fully faded from the canvas.
+
+### Step 4.2: Introduce Braille-Based Organic Thickness
+
+-   **Features:** `features.beat_strength`, `features.spectral_flatness` (or other expressive metrics available in the audio pipeline).
+-   **Logic:**
+    1.  Extend `BrushStroke` (and its `TrailPoint`s) with an `intensity` or `thickness` parameter derived from the chosen audio features so stroke boldness mirrors the music.
+    2.  Replace single-block rendering with a Braille-dot routine inspired by `PleasureAnimation`, mapping normalized coordinates into the 2×4 Braille cell space and populating dot patterns that reflect the stroke’s intensity.
+    3.  Scale the number of lit Braille dots and their spread by the stroke’s current thickness to produce organic, variable-weight strokes. Ensure adjacent samples blend smoothly to avoid rigid, pixelated edges.
+    4.  Allow intensity to taper along the trail as the stroke fades, so older trail samples naturally become thinner and lighter before vanishing.
+    5.  Validate by rendering sequences with different musical dynamics, confirming that strong beats yield bold, expressive strokes while quieter passages produce thinner, delicate marks.
