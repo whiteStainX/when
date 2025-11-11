@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <random>
 #include <vector>
@@ -50,11 +51,13 @@ public:
 private:
     void create_or_resize_plane(notcurses* nc);
     void draw_frame(int frame_y, int frame_x, int frame_height, int frame_width);
-    void render_particle(const StrokeParticle& particle,
-                         int frame_y,
-                         int frame_x,
-                         int interior_height,
-                         int interior_width);
+    void render_point(float normalized_x,
+                      float normalized_y,
+                      std::uint8_t intensity,
+                      int frame_y,
+                      int frame_x,
+                      int interior_height,
+                      int interior_width);
     void spawn_particles(int count, bool heavy, float treble_envelope);
 
     ncplane* plane_ = nullptr;

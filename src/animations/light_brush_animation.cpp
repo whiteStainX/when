@@ -210,6 +210,15 @@ void LightBrushAnimation::update(float delta_time,
         particle.y = std::clamp(particle.y, 0.0f, 1.0f);
 
         stroke.trail.push_front(TrailPoint{particle.x, particle.y, elapsed_time_});
+
+        const float trail_lifespan = std::max(particle.lifespan, 0.0f);
+        while (!stroke.trail.empty()) {
+            const float trail_age = elapsed_time_ - stroke.trail.back().spawn_time;
+            if (trail_age <= trail_lifespan) {
+                break;
+            }
+            stroke.trail.pop_back();
+        }
     }
 
     const float clamped_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
@@ -279,7 +288,39 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
     }
 
     for (const auto& stroke : strokes_) {
-        render_particle(stroke.head, frame_y, frame_x, interior_height, interior_width);
+        const float fade_duration = std::max(stroke.head.lifespan, 1.0e-3f);
+
+        for (auto it = stroke.trail.rbegin(); it != stroke.trail.rend(); ++it) {
+            const float age = std::max(0.0f, elapsed_time_ - it->spawn_time);
+            const float normalized_age = std::clamp(age / fade_duration, 0.0f, 1.0f);
+            const float brightness = 1.0f - normalized_age;
+            if (brightness <= 0.0f) {
+                continue;
+            }
+
+            const std::uint8_t intensity = static_cast<std::uint8_t>(
+                std::round(brightness * static_cast<float>(kParticleForegroundColor)));
+
+            if (intensity == 0u) {
+                continue;
+            }
+
+            render_point(it->x,
+                         it->y,
+                         intensity,
+                         frame_y,
+                         frame_x,
+                         interior_height,
+                         interior_width);
+        }
+
+        render_point(stroke.head.x,
+                     stroke.head.y,
+                     kParticleForegroundColor,
+                     frame_y,
+                     frame_x,
+                     interior_height,
+                     interior_width);
     }
 }
 
@@ -391,17 +432,19 @@ void LightBrushAnimation::draw_frame(int frame_y, int frame_x, int frame_height,
     cleanup_cells();
 }
 
-void LightBrushAnimation::render_particle(const StrokeParticle& particle,
-                                          int frame_y,
-                                          int frame_x,
-                                          int interior_height,
-                                          int interior_width) {
-    if (!plane_ || interior_height <= 0 || interior_width <= 0) {
+void LightBrushAnimation::render_point(float normalized_x,
+                                       float normalized_y,
+                                       std::uint8_t intensity,
+                                       int frame_y,
+                                       int frame_x,
+                                       int interior_height,
+                                       int interior_width) {
+    if (!plane_ || interior_height <= 0 || interior_width <= 0 || intensity == 0u) {
         return;
     }
 
-    const float clamped_x = std::clamp(particle.x, 0.0f, 1.0f);
-    const float clamped_y = std::clamp(particle.y, 0.0f, 1.0f);
+    const float clamped_x = std::clamp(normalized_x, 0.0f, 1.0f);
+    const float clamped_y = std::clamp(normalized_y, 0.0f, 1.0f);
 
     const int y = frame_y + 1 + static_cast<int>(std::round(clamped_y * std::max(0, interior_height - 1)));
     const int x = frame_x + 1 + static_cast<int>(std::round(clamped_x * std::max(0, interior_width - 1)));
@@ -411,10 +454,8 @@ void LightBrushAnimation::render_particle(const StrokeParticle& particle,
         return;
     }
 
-    nccell_set_fg_rgb8(&cell,
-                       static_cast<int>(kParticleForegroundColor),
-                       static_cast<int>(kParticleForegroundColor),
-                       static_cast<int>(kParticleForegroundColor));
+    const int color = static_cast<int>(intensity);
+    nccell_set_fg_rgb8(&cell, color, color, color);
     nccell_set_bg_rgb8(&cell,
                        static_cast<int>(kParticleBackgroundColor),
                        static_cast<int>(kParticleBackgroundColor),
@@ -452,6 +493,15 @@ void LightBrushAnimation::spawn_particles(int count, bool heavy, float treble_en
             lifespan_min + (lifespan_max - lifespan_min) * std::clamp(treble_envelope, 0.0f, 1.0f);
 
         stroke.trail.push_front(TrailPoint{stroke.head.x, stroke.head.y, elapsed_time_});
+
+        const float trail_lifespan = std::max(stroke.head.lifespan, 0.0f);
+        while (!stroke.trail.empty()) {
+            const float trail_age = elapsed_time_ - stroke.trail.back().spawn_time;
+            if (trail_age <= trail_lifespan) {
+                break;
+            }
+            stroke.trail.pop_back();
+        }
 
         strokes_.push_back(std::move(stroke));
     }
