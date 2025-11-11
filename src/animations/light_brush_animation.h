@@ -42,7 +42,7 @@ private:
                          int frame_x,
                          int interior_height,
                          int interior_width);
-    void spawn_particles(int count, bool heavy);
+    void spawn_particles(int count, bool heavy, float treble_envelope);
 
     ncplane* plane_ = nullptr;
     bool is_active_ = false;
