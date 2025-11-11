@@ -20,24 +20,25 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 0.2: Define Core Data Structures
 
--   In `light_brush_animation.h`, define a struct to represent a single "brush stroke" particle.
-    ```cpp
-    struct StrokeParticle {
-        float x, y;         // Current position (normalized 0.0-1.0)
-        float vx, vy;       // Current velocity
-        float age;
-        float lifespan;
-        // ... other state like color, thickness, texture ...
-    };
-    ```
--   Add a `std::vector<StrokeParticle> particles_;` member to the class. The trail of the brush stroke will be rendered by drawing particles from previous frames, which we will implement in a later step. For now, this vector will just hold the "head" of each stroke.
+- In `light_brush_animation.h`, define a struct to represent a single "brush stroke" particle.
+  ```cpp
+  struct StrokeParticle {
+      float x, y;         // Current position (normalized 0.0-1.0)
+      float vx, vy;       // Current velocity
+      float age;
+      float lifespan;
+      // ... other state like color, thickness, texture ...
+  };
+  ```
+- Add a `std::vector<StrokeParticle> particles_;` member to the class. The trail of the brush stroke will be rendered by drawing particles from previous frames, which we will implement in a later step. For now, this vector will just hold the "head" of each stroke.
 
 ### Step 0.3: Render a Frame and a Single Particle
 
 1.  In `init()`, create the main `ncplane` for the animation.
 2.  In `render()`, borrow the frame-drawing logic from `SpaceRockAnimation` to render a continuous bounding box that fills most of the screen. This will be our "canvas."
 3.  Inside the `render()` method, hardcode a single `StrokeParticle` and draw it as a character (e.g., `*` or `█`) at its position within the frame.
--   **Validation:** The program displays a single, static character inside a large frame.
+
+- **Validation:** The program displays a single, static character inside a large frame.
 
 ## Phase 1: Rhythmic Spawning and Lifecycles
 
@@ -45,23 +46,23 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 1.1: Implement Rhythmic Spawning
 
--   **Feature:** `features.bass_beat`, `features.mid_beat`, `features.beat_strength`
--   **Logic:** In `update()`, check for beat events.
-    -   If `features.bass_beat` is true, spawn a new "heavy" particle (which we will later define as having a thick, slow stroke).
-    -   If `features.mid_beat` is true, spawn a new "light" particle (thin, fast stroke).
-    -   The number of particles spawned can be proportional to `features.beat_strength`.
-    -   New particles should be given a random initial position and velocity.
--   **Validation:** Particles pop into existence on the canvas, synchronized with the drum patterns in the music.
+- **Feature:** `features.bass_beat`, `features.mid_beat`, `features.beat_strength`
+- **Logic:** In `update()`, check for beat events.
+  - If `features.bass_beat` is true, spawn a new "heavy" particle (which we will later define as having a thick, slow stroke).
+  - If `features.mid_beat` is true, spawn a new "light" particle (thin, fast stroke).
+  - The number of particles spawned can be proportional to `features.beat_strength`.
+  - New particles should be given a random initial position and velocity.
+- **Validation:** Particles pop into existence on the canvas, synchronized with the drum patterns in the music.
 
 ### Step 1.2: Implement Particle Lifecycle
 
--   **Feature:** `features.treble_envelope`
--   **Logic:**
-    1.  In the `StrokeParticle` struct, add `age` and `lifespan` members.
-    2.  In `update()`, iterate through all particles. Increment their `age` by `delta_time`.
-    3.  When spawning a particle, set its `lifespan` based on `features.treble_envelope`. A high treble energy means the "paint" is vibrant and lasts longer. A low treble energy means it's "dull" and fades quickly.
-    4.  Remove any particles where `age >= lifespan`.
--   **Validation:** Particles appear on the beat and fade away after a duration controlled by the high-frequency energy of the music.
+- **Feature:** `features.treble_envelope`
+- **Logic:**
+  1.  In the `StrokeParticle` struct, add `age` and `lifespan` members.
+  2.  In `update()`, iterate through all particles. Increment their `age` by `delta_time`.
+  3.  When spawning a particle, set its `lifespan` based on `features.treble_envelope`. A high treble energy means the "paint" is vibrant and lasts longer. A low treble energy means it's "dull" and fades quickly.
+  4.  Remove any particles where `age >= lifespan`.
+- **Validation:** Particles appear on the beat and fade away after a duration controlled by the high-frequency energy of the music.
 
 ## Phase 2: Dynamic and Emotional Movement
 
@@ -69,22 +70,22 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 2.1: Implement Basic Movement and Turbulence
 
--   **Features:** `features.total_energy`, `features.spectral_flatness`
--   **Logic:**
-    1.  In `update()`, in the loop over all particles, update their position: `p.x += p.vx * dt; p.y += p.vy * dt;`.
-    2.  Implement "turbulence." On each frame, add a small random vector to each particle's velocity. The magnitude of this random vector should be scaled by `features.spectral_flatness`.
-    3.  Scale the base speed of the particles by the smoothed energy in `features.total_energy` (or `total_energy_instantaneous` if a snappier response is desired). Document the chosen mapping so implementers know how energy translates into speed multipliers.
-    4.  Add logic to make particles bounce off the inside walls of the frame.
--   **Validation:** Particles now move around the canvas. Their movement is smooth and flowing for tonal music (low flatness) and chaotic/erratic for noisy music (high flatness).
+- **Features:** `features.total_energy`, `features.spectral_flatness`
+- **Logic:**
+  1.  In `update()`, in the loop over all particles, update their position: `p.x += p.vx * dt; p.y += p.vy * dt;`.
+  2.  Implement "turbulence." On each frame, add a small random vector to each particle's velocity. The magnitude of this random vector should be scaled by `features.spectral_flatness`.
+  3.  Scale the base speed of the particles by the smoothed energy in `features.total_energy` (or `total_energy_instantaneous` if a snappier response is desired). Document the chosen mapping so implementers know how energy translates into speed multipliers.
+  4.  Add logic to make particles bounce off the inside walls of the frame.
+- **Validation:** Particles now move around the canvas. Their movement is smooth and flowing for tonal music (low flatness) and chaotic/erratic for noisy music (high flatness).
 
 ### Step 2.2: Implement Harmonic "Seeking" Behavior
 
--   **Feature:** `features.chroma`
--   **Logic:** This is the core of the "emotional" movement.
-    1.  In `update()`, if `features.chroma_available` is true, define 1-3 "attractor" points on the canvas. The positions of these attractors should be determined by the dominant notes in the `features.chroma` vector. (e.g., map the 12 notes to 12 positions around a circle).
-    2.  In the particle update loop, for each particle, calculate a force vector pointing towards the nearest attractor.
-    3.  Modify the particle's velocity (`vx`, `vy`) by adding a fraction of this force vector. This will "nudge" the particle's path towards the harmonic centers of the music.
--   **Validation:** The entire collection of strokes will appear to swarm and flow together, shifting their collective direction as the chords and melody of the song change. The movement feels intentional, not random.
+- **Feature:** `features.chroma`
+- **Logic:** This is the core of the "emotional" movement.
+  1.  In `update()`, if `features.chroma_available` is true, define 1-3 "attractor" points on the canvas. The positions of these attractors should be determined by the dominant notes in the `features.chroma` vector. (e.g., map the 12 notes to 12 positions around a circle).
+  2.  In the particle update loop, for each particle, calculate a force vector pointing towards the nearest attractor.
+  3.  Modify the particle's velocity (`vx`, `vy`) by adding a fraction of this force vector. This will "nudge" the particle's path towards the harmonic centers of the music.
+- **Validation:** The entire collection of strokes will appear to swarm and flow together, shifting their collective direction as the chords and melody of the song change. The movement feels intentional, not random.
 
 ## Phase 3: The Painterly Trail
 
@@ -92,21 +93,21 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 3.1: Implement the Trail Data Structure
 
--   **Logic:**
-    1.  Instead of a `std::vector<StrokeParticle>`, the main data structure will now be `std::vector<BrushStroke>`, where `BrushStroke` is a new class.
-    2.  Each `BrushStroke` object will contain a `StrokeParticle` for its "head" and a `std::deque<TrailPoint>` for its tail, where `TrailPoint` just stores an `x`, `y`, and `spawn_time`.
-    3.  In the `update()` loop for each `BrushStroke`, add the head's current position to the front of its `trail` deque.
+- **Logic:**
+  1.  Instead of a `std::vector<StrokeParticle>`, the main data structure will now be `std::vector<BrushStroke>`, where `BrushStroke` is a new class.
+  2.  Each `BrushStroke` object will contain a `StrokeParticle` for its "head" and a `std::deque<TrailPoint>` for its tail, where `TrailPoint` just stores an `x`, `y`, and `spawn_time`.
+  3.  In the `update()` loop for each `BrushStroke`, add the head's current position to the front of its `trail` deque.
 
 ### Step 3.2: Render the Fading Trail
 
--   **Feature:** `features.treble_envelope` (to control fade time)
--   **Logic:**
-    1.  In `render()`, iterate through each `BrushStroke`.
-    2.  Then, iterate through the `TrailPoint`s in its `trail` deque.
-    3.  For each point, calculate its age (`current_time - point.spawn_time`).
-    4.  Map this age to a brightness/color value. A point that was just created should be bright, and it should fade to black as it approaches its lifespan (which is controlled by `treble_envelope`).
-    5.  Draw the character for the trail point with this calculated color. Overlapping strokes will naturally blend as their colors are drawn on top of each other.
--   **Validation:** The moving particles now leave beautiful, fading trails behind them, creating the final "abstract painting" effect. The length and brightness of these trails are controlled by the music.
+- **Feature:** `features.treble_envelope` (to control fade time)
+- **Logic:**
+  1.  In `render()`, iterate through each `BrushStroke`.
+  2.  Then, iterate through the `TrailPoint`s in its `trail` deque.
+  3.  For each point, calculate its age (`current_time - point.spawn_time`).
+  4.  Map this age to a brightness/color value. A point that was just created should be bright, and it should fade to black as it approaches its lifespan (which is controlled by `treble_envelope`).
+  5.  Draw the character for the trail point with this calculated color. Overlapping strokes will naturally blend as their colors are drawn on top of each other.
+- **Validation:** The moving particles now leave beautiful, fading trails behind them, creating the final "abstract painting" effect. The length and brightness of these trails are controlled by the music.
 
 ## Phase 4: Expressive Single-Stroke Presentation
 
@@ -114,22 +115,22 @@ The animation will be contained within a continuous frame, similar to the `Space
 
 ### Step 4.1: Enforce Single-Stroke Lifecycle with Smooth Fading
 
--   **Logic:**
-    1.  Update `LightBrushAnimation::update` so the animation maintains at most one active `BrushStroke` at a time. Reuse the existing stroke while it is fading instead of spawning new ones indiscriminately.
-    2.  Replace the hard cut-off removal with brightness-based fading. Keep the stroke alive until its computed brightness reaches zero, and drive this brightness from a time-based fade curve (e.g., exponential or eased polynomial) tied to `stroke.head.age / stroke.head.lifespan`.
-    3.  Adjust the trail update logic so both the head and tail apply the same fade curve, allowing the visible stroke to dissipate gracefully rather than disappearing abruptly.
-    4.  Gate new stroke creation on the previous stroke’s fade completion. Once the brightness reaches zero, spawn a fresh stroke based on the next rhythm cue to preserve the “one artist stroke at a time” aesthetic.
-    5.  Validate by stepping through an audio-driven run and confirming that a new stroke is never generated until the current stroke has fully faded from the canvas.
+- **Logic:**
+  1.  Update `LightBrushAnimation::update` so the animation maintains at most one active `BrushStroke` at a time. Reuse the existing stroke while it is fading instead of spawning new ones indiscriminately.
+  2.  Replace the hard cut-off removal with brightness-based fading. Keep the stroke alive until its computed brightness reaches zero, and drive this brightness from a time-based fade curve (e.g., exponential or eased polynomial) tied to `stroke.head.age / stroke.head.lifespan`.
+  3.  Adjust the trail update logic so both the head and tail apply the same fade curve, allowing the visible stroke to dissipate gracefully rather than disappearing abruptly.
+  4.  Gate new stroke creation on the previous stroke’s fade completion. Once the brightness reaches zero, spawn a fresh stroke based on the next rhythm cue to preserve the “one artist stroke at a time” aesthetic.
+  5.  Validate by stepping through an audio-driven run and confirming that a new stroke is never generated until the current stroke has fully faded from the canvas.
 
 ### Step 4.2: Introduce Braille-Based Organic Thickness
 
--   **Features:** `features.beat_strength`, `features.spectral_flatness` (or other expressive metrics available in the audio pipeline).
--   **Logic:**
-    1.  Extend `BrushStroke` (and its `TrailPoint`s) with an `intensity` or `thickness` parameter derived from the chosen audio features so stroke boldness mirrors the music.
-    2.  Replace single-block rendering with a Braille-dot routine inspired by `PleasureAnimation`, mapping normalized coordinates into the 2×4 Braille cell space and populating dot patterns that reflect the stroke’s intensity.
-    3.  Scale the number of lit Braille dots and their spread by the stroke’s current thickness to produce organic, variable-weight strokes. Ensure adjacent samples blend smoothly to avoid rigid, pixelated edges.
-    4.  Allow intensity to taper along the trail as the stroke fades, so older trail samples naturally become thinner and lighter before vanishing.
-    5.  Validate by rendering sequences with different musical dynamics, confirming that strong beats yield bold, expressive strokes while quieter passages produce thinner, delicate marks.
+- **Features:** `features.beat_strength`, `features.spectral_flatness` (or other expressive metrics available in the audio pipeline).
+- **Logic:**
+  1.  Extend `BrushStroke` (and its `TrailPoint`s) with an `intensity` or `thickness` parameter derived from the chosen audio features so stroke boldness mirrors the music.
+  2.  Replace single-block rendering with a Braille-dot routine inspired by `PleasureAnimation`, mapping normalized coordinates into the 2×4 Braille cell space and populating dot patterns that reflect the stroke’s intensity.
+  3.  Scale the number of lit Braille dots and their spread by the stroke’s current thickness to produce organic, variable-weight strokes. Ensure adjacent samples blend smoothly to avoid rigid, pixelated edges.
+  4.  Allow intensity to taper along the trail as the stroke fades, so older trail samples naturally become thinner and lighter before vanishing.
+  5.  Validate by rendering sequences with different musical dynamics, confirming that strong beats yield bold, expressive strokes while quieter passages produce thinner, delicate marks.
 
 ## Phase 5: Layered Brushwork Evolution
 
@@ -140,7 +141,6 @@ The animation will be contained within a continuous frame, similar to the `Space
 1.  Refactor the lifecycle manager so it tracks a configurable maximum stroke count (start with 3–5) instead of a single active stroke. Use a lightweight pool or ring buffer so new spawns recycle the oldest fully faded stroke.
 2.  Introduce per-stroke `lifecycle_profile` data that stores lifespan ranges, fade curves, and persistence multipliers. Seed these parameters from `features.treble_envelope`, `features.total_energy`, and a dash of randomness so each stroke feels unique.
 3.  Implement staggered fade logic: allow a stroke to remain visible beyond its nominal lifespan by blending its brightness with a long tail curve (e.g., exponential with adjustable decay). Ensure the stroke only exits once both head and trail brightness values fall below a perceptual threshold.
-4.  Validate by logging active stroke counts over time while playing sample tracks—the overlay should never drop to zero strokes once the music starts flowing, yet the canvas should refresh itself gradually.
 
 ### Step 5.2: Layer-Friendly Rendering Pipeline
 
@@ -154,7 +154,6 @@ The animation will be contained within a continuous frame, similar to the `Space
 1.  Extend `BrushStroke` with evolving geometry controls: allow each stroke to modulate its thickness, curvature, and head shape independently over its life. Drive these parameters from combinations of `beat_strength`, `spectral_flatness`, and `chroma` dominance (e.g., treble-heavy passages yield sharper angles and thinner ends).
 2.  Introduce long-form gestural strokes by sampling target path lengths from a broad range (e.g., 0.5–4× the Phase 4 baseline). Tie the maximum achievable length to `features.mid_envelope` so sustained harmonies unlock more sweeping gestures while percussive moments favor shorter marks.
 3.  Inject micro-variations into velocity (controlled noise, subtle rotation) to keep each stroke organic. Allow strokes to occasionally self-intersect or cross others; rely on the blend pipeline to turn those intersections into luminous highlights.
-4.  Validate by capturing still frames at regular intervals. Review the resulting compositions to ensure they resemble layered abstract paintings rather than discrete particles.
 
 ### Step 5.4: Adaptive Population Management
 
