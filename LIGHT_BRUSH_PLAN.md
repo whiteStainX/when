@@ -130,3 +130,35 @@ The animation will be contained within a continuous frame, similar to the `Space
     3.  Scale the number of lit Braille dots and their spread by the stroke’s current thickness to produce organic, variable-weight strokes. Ensure adjacent samples blend smoothly to avoid rigid, pixelated edges.
     4.  Allow intensity to taper along the trail as the stroke fades, so older trail samples naturally become thinner and lighter before vanishing.
     5.  Validate by rendering sequences with different musical dynamics, confirming that strong beats yield bold, expressive strokes while quieter passages produce thinner, delicate marks.
+
+## Phase 5: Layered Brushwork Evolution
+
+**Goal:** Transition from the single-stroke showcase to an expressive, layered composition where multiple strokes share the canvas, overlap naturally, and fade out on asynchronous schedules to evoke a living abstract painting.
+
+### Step 5.1: Expand Stroke Lifecycle Controls
+
+1.  Refactor the lifecycle manager so it tracks a configurable maximum stroke count (start with 3–5) instead of a single active stroke. Use a lightweight pool or ring buffer so new spawns recycle the oldest fully faded stroke.
+2.  Introduce per-stroke `lifecycle_profile` data that stores lifespan ranges, fade curves, and persistence multipliers. Seed these parameters from `features.treble_envelope`, `features.total_energy`, and a dash of randomness so each stroke feels unique.
+3.  Implement staggered fade logic: allow a stroke to remain visible beyond its nominal lifespan by blending its brightness with a long tail curve (e.g., exponential with adjustable decay). Ensure the stroke only exits once both head and trail brightness values fall below a perceptual threshold.
+4.  Validate by logging active stroke counts over time while playing sample tracks—the overlay should never drop to zero strokes once the music starts flowing, yet the canvas should refresh itself gradually.
+
+### Step 5.2: Layer-Friendly Rendering Pipeline
+
+1.  Update the rendering loop to sort strokes by age or dynamic intensity so younger, brighter strokes naturally sit "above" older ones when composited on the `ncplane`. Confirm the chosen order preserves visual clarity without introducing flicker.
+2.  Enhance the Braille painter to support additive color/intensity blending. Consider maintaining an off-screen accumulation buffer (e.g., per-cell RGBA or brightness) so overlapping samples compound instead of simply overwriting each other.
+3.  Add configurable blend modes (additive, screen, soft-light) and map them to musical cues—e.g., use a more aggressive additive blend during choruses when `features.total_energy` spikes.
+4.  Benchmark render cost with multiple overlapping strokes to ensure frame times stay within target; if necessary, cap trail length dynamically based on `delta_time`.
+
+### Step 5.3: Expressive Variability in Stroke Geometry
+
+1.  Extend `BrushStroke` with evolving geometry controls: allow each stroke to modulate its thickness, curvature, and head shape independently over its life. Drive these parameters from combinations of `beat_strength`, `spectral_flatness`, and `chroma` dominance (e.g., treble-heavy passages yield sharper angles and thinner ends).
+2.  Introduce long-form gestural strokes by sampling target path lengths from a broad range (e.g., 0.5–4× the Phase 4 baseline). Tie the maximum achievable length to `features.mid_envelope` so sustained harmonies unlock more sweeping gestures while percussive moments favor shorter marks.
+3.  Inject micro-variations into velocity (controlled noise, subtle rotation) to keep each stroke organic. Allow strokes to occasionally self-intersect or cross others; rely on the blend pipeline to turn those intersections into luminous highlights.
+4.  Validate by capturing still frames at regular intervals. Review the resulting compositions to ensure they resemble layered abstract paintings rather than discrete particles.
+
+### Step 5.4: Adaptive Population Management
+
+1.  Build a population controller that monitors canvas "busyness" using metrics such as average brightness per cell or active trail sample count. Use this feedback to throttle spawning when the canvas feels overcrowded or boost it when space opens up.
+2.  Mix rhythmic and freeform spawning: continue to key off `bass_beat`/`mid_beat`, but add a background drift of low-intensity strokes triggered by spectral flux or random timers so the canvas never goes silent between beats.
+3.  Allow advanced scenes where strokes of different profiles coexist—e.g., lingering "wash" strokes with very long fade curves alongside punchy, short-lived accents. Document representative parameter presets so implementers can tune the vibe quickly.
+4.  Validate through extended listening sessions across genres (ambient, techno, jazz). Confirm that the controller keeps the canvas alive without overwhelming it, and that overlapping strokes evolve at different cadences.
