@@ -24,6 +24,10 @@ constexpr float kLightVelocityMin = 0.18f;
 constexpr float kLightVelocityMax = 0.35f;
 constexpr float kHeavySpawnStrengthScale = 3.0f;
 constexpr float kLightSpawnStrengthScale = 4.0f;
+constexpr float kHeavyLifespanMin = 1.1f;
+constexpr float kHeavyLifespanMax = 3.0f;
+constexpr float kLightLifespanMin = 0.6f;
+constexpr float kLightLifespanMax = 2.0f;
 }
 
 LightBrushAnimation::LightBrushAnimation()
@@ -60,12 +64,23 @@ void LightBrushAnimation::init(notcurses* nc, const AppConfig& config) {
     create_or_resize_plane(nc);
 }
 
-void LightBrushAnimation::update(float /*delta_time*/,
+void LightBrushAnimation::update(float delta_time,
                                  const AudioMetrics& /*metrics*/,
                                  const AudioFeatures& features) {
     if (!is_active_) {
         return;
     }
+
+    for (auto& particle : particles_) {
+        particle.age += delta_time;
+    }
+
+    particles_.erase(std::remove_if(particles_.begin(),
+                                    particles_.end(),
+                                    [](const StrokeParticle& particle) {
+                                        return particle.age >= particle.lifespan;
+                                    }),
+                     particles_.end());
 
     const float clamped_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
     const auto compute_spawn_count = [&](bool heavy) {
@@ -74,12 +89,14 @@ void LightBrushAnimation::update(float /*delta_time*/,
         return std::max(1, scaled);
     };
 
+    const float clamped_treble = std::clamp(features.treble_envelope, 0.0f, 1.0f);
+
     if (features.bass_beat) {
-        spawn_particles(compute_spawn_count(true), true);
+        spawn_particles(compute_spawn_count(true), true, clamped_treble);
     }
 
     if (features.mid_beat) {
-        spawn_particles(compute_spawn_count(false), false);
+        spawn_particles(compute_spawn_count(false), false, clamped_treble);
     }
 }
 
@@ -277,7 +294,7 @@ void LightBrushAnimation::render_particle(const StrokeParticle& particle,
     nccell_release(plane_, &cell);
 }
 
-void LightBrushAnimation::spawn_particles(int count, bool heavy) {
+void LightBrushAnimation::spawn_particles(int count, bool heavy, float treble_envelope) {
     if (count <= 0) {
         return;
     }
@@ -298,7 +315,11 @@ void LightBrushAnimation::spawn_particles(int count, bool heavy) {
         particle.vx = std::cos(angle) * speed;
         particle.vy = std::sin(angle) * speed;
         particle.age = 0.0f;
-        particle.lifespan = heavy ? 1.5f : 1.0f;
+
+        const float lifespan_min = heavy ? kHeavyLifespanMin : kLightLifespanMin;
+        const float lifespan_max = heavy ? kHeavyLifespanMax : kLightLifespanMax;
+        particle.lifespan =
+            lifespan_min + (lifespan_max - lifespan_min) * std::clamp(treble_envelope, 0.0f, 1.0f);
 
         particles_.push_back(particle);
     }
