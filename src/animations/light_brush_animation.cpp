@@ -236,13 +236,17 @@ void LightBrushAnimation::update(float delta_time,
         }
     }
 
-    if (strokes_.empty()) {
-        const float clamped_treble = std::clamp(features.treble_envelope, 0.0f, 1.0f);
-        if (features.bass_beat) {
-            spawn_particles(1, true, clamped_treble, clamped_beat_strength, clamped_flatness);
-        } else if (features.mid_beat) {
-            spawn_particles(1, false, clamped_treble, clamped_beat_strength, clamped_flatness);
-        }
+    const float clamped_treble = std::clamp(features.treble_envelope, 0.0f, 1.0f);
+
+    if (features.bass_beat) {
+        spawn_particles(1, true, clamped_treble, clamped_beat_strength, clamped_flatness);
+    } else if (features.mid_beat) {
+        spawn_particles(1, false, clamped_treble, clamped_beat_strength, clamped_flatness);
+    } else if (features.treble_beat) {
+        spawn_particles(1, false, clamped_treble, clamped_beat_strength, clamped_flatness);
+    } else if (features.beat_detected) {
+        const bool heavy_bias = features.bass_energy >= features.mid_energy;
+        spawn_particles(1, heavy_bias, clamped_treble, clamped_beat_strength, clamped_flatness);
     }
 }
 

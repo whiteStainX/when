@@ -27,7 +27,7 @@ public:
         float smoothing_attack = 0.35f;
         float smoothing_release = 0.08f;
         float band_flux_smoothing = 0.08f;
-        float band_onset_sensitivity = 2.0f;
+        float band_onset_sensitivity = 1.5f;
         float bass_onset_sensitivity = 2.0f;
         float mid_onset_sensitivity = 2.0f;
         float treble_onset_sensitivity = 2.0f;
