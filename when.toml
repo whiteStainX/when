@@ -84,7 +84,7 @@ space_rock_size_interp_rate = 3.5
 [[animations]]
 type = "Pleasure"
 z_index = 3
-initially_active = false
+initially_active = true
 plane_rows = 24
 plane_cols = 48
 pleasure_magnitude_scale = 0.1
@@ -110,4 +110,4 @@ pleasure_max_downward_excursion = 8
 [[animations]]
 type = "LightBrush"
 z_index = 3
-initially_active = true
+initially_active = false

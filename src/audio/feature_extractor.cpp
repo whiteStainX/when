@@ -298,12 +298,31 @@ AudioFeatures FeatureExtractor::process(const FeatureInputFrame& input_frame) {
             if (start >= end) {
                 return false;
             }
-            const float band_value = compute_average_energy(band_flux, start, end);
-            const float band_baseline = compute_average_energy(baseline_span, start, end);
+
+            const std::size_t band_limit = band_flux.size();
+            if (start >= band_limit) {
+                return false;
+            }
+
+            end = std::min(end, band_limit);
+            if (end <= start) {
+                return false;
+            }
+
+            const std::size_t span = end - start;
+
+            double band_value_sum = 0.0;
+            double band_baseline_sum = 0.0;
+            for (std::size_t i = start; i < end; ++i) {
+                band_value_sum += std::max(band_flux[i], 0.0f);
+                band_baseline_sum += std::max(baseline_span[i], 0.0f);
+            }
+
             const float applied_sensitivity = std::max(pick_sensitivity(sensitivity), 0.0f);
+            const float min_flux = config_.band_onset_min_flux * static_cast<float>(span);
             const float threshold =
-                std::max(config_.band_onset_min_flux, band_baseline * applied_sensitivity);
-            return band_value > threshold;
+                std::max(min_flux, static_cast<float>(band_baseline_sum) * applied_sensitivity);
+            return static_cast<float>(band_value_sum) > threshold;
         };
 
         features.bass_beat = detect_band(bass_start, bass_end, config_.bass_onset_sensitivity);
