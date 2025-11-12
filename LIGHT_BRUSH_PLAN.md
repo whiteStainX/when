@@ -132,32 +132,49 @@ The animation will be contained within a continuous frame, similar to the `Space
   4.  Allow intensity to taper along the trail as the stroke fades, so older trail samples naturally become thinner and lighter before vanishing.
   5.  Validate by rendering sequences with different musical dynamics, confirming that strong beats yield bold, expressive strokes while quieter passages produce thinner, delicate marks.
 
-## Phase 5: Layered Brushwork Evolution
+## Phase 5: Emergent Layered Composition
 
-**Goal:** Transition from the single-stroke showcase to an expressive, layered composition where multiple strokes share the canvas, overlap naturally, and fade out on asynchronous schedules to evoke a living abstract painting.
+**Goal:** Evolve the animation into a true abstract painting by allowing an arbitrary number of strokes to coexist, overlap, and fade independently. The visual density and complexity of the canvas will become an *emergent property* of the music's intensity and rhythm, rather than being controlled by an explicit cap.
 
-### Step 5.1: Expand Stroke Lifecycle Controls
+**Core Philosophy:** We will not manage a "population." We will only define the rules for a stroke's birth, its life, and its death. The complexity of the final image will arise naturally from these simple, local rules.
 
-1.  Refactor the lifecycle manager so it tracks a configurable maximum stroke count (start with 3–5) instead of a single active stroke. Replace the Phase 4 fade-completion gate with per-stroke fade tracking so multiple strokes can coexist; use a lightweight pool or ring buffer so new spawns recycle the oldest fully faded stroke without reviving ones still visible.
-2.  Introduce per-stroke `lifecycle_profile` data that stores lifespan ranges, fade curves, and persistence multipliers. Seed these parameters from `features.treble_envelope`, `features.total_energy`, and a dash of randomness so each stroke feels unique.
-3.  Implement staggered fade logic: allow a stroke to remain visible beyond its nominal lifespan by blending its brightness with a long tail curve (e.g., exponential with adjustable decay). Ensure the stroke only exits once both head and trail brightness values fall below a perceptual threshold.
+### Step 5.1: Implement an Uncapped, Emergent Lifecycle
 
-### Step 5.2: Layer-Friendly Rendering Pipeline
+-   **Logic:**
+    1.  **Remove `max_strokes`:** Eliminate all logic related to a maximum stroke count. The system no longer needs to know or care how many strokes are active.
+    2.  **"Fire-and-Forget" Spawning:** The spawning logic in `update()` remains the same (triggered by `bass_beat`, `mid_beat`, etc.), but it will now simply add new `BrushStroke` objects to the `strokes_` vector without any checks on the current population size.
+    3.  **Self-Contained Update:** Each `BrushStroke` object will manage its own state. Its `update(delta_time, features)` method will handle its movement, aging, and fading. This method should return a boolean, `is_alive()`, which is `false` only when the stroke's brightness has faded below a near-zero threshold.
+    4.  **Efficient Cleanup:** After iterating through and updating all strokes, use the C++ **erase-remove idiom** to purge all "dead" strokes from the main `strokes_` vector in a single, efficient operation.
+        ```cpp
+        // In LightBrushAnimation::update(), after the main update loop:
+        strokes_.erase(
+            std::remove_if(strokes_.begin(), strokes_.end(),
+                [](const BrushStroke& s) { return !s.is_alive(); }
+            ),
+            strokes_.end()
+        );
+        ```
+-   **Validation:** The number of strokes on screen directly reflects the musical activity. A flurry of drum hits creates a dense, chaotic canvas, which then gracefully fades during a quiet passage. The system is stable and performance does not degrade due to the cleanup logic.
 
-1.  Update the rendering loop to sort strokes by age or dynamic intensity so younger, brighter strokes naturally sit "above" older ones when composited on the `ncplane`. Confirm the chosen order preserves visual clarity without introducing flicker.
-2.  Enhance the Braille painter to support additive color/intensity blending. Consider maintaining an off-screen accumulation buffer (e.g., per-cell RGBA or brightness) so overlapping samples compound instead of simply overwriting each other, and note the expected terminal color depth (true color vs. 256-color) to guide palette precision.
-3.  Add configurable blend modes (additive, screen, soft-light) and map them to musical cues—e.g., use a more aggressive additive blend during choruses when `features.total_energy` spikes. Document a graceful fallback (such as per-cell brightness clamping with single-pass compositing) for environments where the accumulation buffer or higher blend modes prove too costly.
-4.  Benchmark render cost with multiple overlapping strokes to ensure frame times stay within target; if necessary, cap trail length dynamically based on `delta_time`. Include guidance on profiling both the full accumulation path and the fallback so implementers can decide which pipeline fits their performance budget.
+### Step 5.2: Implement a Layer-Friendly Rendering Pipeline with Blending
 
-### Step 5.3: Expressive Variability in Stroke Geometry
+-   **Goal:** To make overlapping strokes look beautiful and luminous, not just like one overwriting another.
+-   **Logic:**
+    1.  **Off-screen Accumulation Buffer:** In your `LightBrushAnimation` class, create a private member `std::vector<Color> accumulation_buffer_`, where `Color` is a simple struct like `{ float r, g, b; }`. This buffer should be resized to match the `ncplane`'s dimensions (`rows * cols`).
+    2.  **Rendering Process:**
+        a.  On each `render()` call, clear this buffer to black (`{0,0,0}`).
+        b.  Iterate through every `BrushStroke` and every `TrailPoint` in its tail.
+        c.  For each point, calculate its current color and brightness.
+        d.  **Instead of drawing to the `ncplane`**, find the corresponding index in your `accumulation_buffer_` and **add** the color to it (`buffer[i].r += point.r`). This is **additive blending**.
+        e.g.  After all strokes and trails have been processed, iterate through your `accumulation_buffer_`. For each cell, clamp the final color values (e.g., `r = std::min(1.0f, buffer[i].r)`) and then draw a single character to the `ncplane` with that final, blended color.
+-   **Validation:** Where strokes cross, the color is visibly brighter and more intense, creating a luminous, layered effect. The performance should be benchmarked; if it's too slow, a fallback to direct rendering can be considered, but the accumulation buffer is key to the high-quality look.
 
-1.  Extend `BrushStroke` with evolving geometry controls: allow each stroke to modulate its thickness, curvature, and head shape independently over its life. Drive these parameters from combinations of `beat_strength`, `spectral_flatness`, and `chroma` dominance (e.g., treble-heavy passages yield sharper angles and thinner ends).
-2.  Introduce long-form gestural strokes by sampling target path lengths from a broad range (e.g., 0.5–4× the Phase 4 baseline). Tie the maximum achievable length to `features.mid_envelope` so sustained harmonies unlock more sweeping gestures while percussive moments favor shorter marks.
-3.  Inject micro-variations into velocity (controlled noise, subtle rotation) to keep each stroke organic. Allow strokes to occasionally self-intersect or cross others; rely on the blend pipeline to turn those intersections into luminous highlights.
+### Step 5.3: Implement Expressive Stroke Geometry
 
-### Step 5.4: Adaptive Population Management
+-   **Goal:** Make each stroke's shape and path tell a story based on the music that created it.
+-   **Logic:**
+    1.  **Evolving Thickness:** When a `BrushStroke` is spawned, its initial thickness can be set by `features.mid_energy_instantaneous`. As it ages, this thickness can decay, or it can "breathe" in time with `features.beat_phase`. This logic lives inside the `BrushStroke::update()` method.
+    2.  **Gestural Path Length:** The `lifespan` of a stroke, which is already seeded by `treble_envelope`, now directly controls its potential path length. A long lifespan (from a sustained synth pad) will allow a stroke to draw a long, sweeping gesture across the canvas. A short lifespan (from a percussive hit) will create a short, staccato mark.
+    3.  **Variable Curvature:** Introduce a `curvature` property to the `BrushStroke`'s state. This can be set at spawn time based on `features.spectral_centroid` (e.g., brighter sounds create straighter lines, darker sounds create more curved paths). The `update()` method will then use this property to apply a constant turning force to the stroke's velocity, creating elegant arcs instead of just straight lines.
+-   **Validation:** The canvas is filled with a variety of strokes: long, graceful arcs mix with short, sharp jabs. The thickness of the lines visibly swells and shrinks with the music's intensity. The overall impression is one of dynamic, intentional, and varied mark-making.
 
-1.  Build a population controller that monitors canvas "busyness" using metrics such as average brightness per cell or active trail sample count. Maintain running aggregates (e.g., update brightness totals as strokes draw and fade) so the controller avoids full-canvas scans each frame, and smooth the metrics with exponential moving averages or hysteresis thresholds to prevent flicker.
-2.  Mix rhythmic and freeform spawning: continue to key off `bass_beat`/`mid_beat`, but add a background drift of low-intensity strokes triggered by spectral flux or random timers so the canvas never goes silent between beats.
-3.  Allow advanced scenes where strokes of different profiles coexist—e.g., lingering "wash" strokes with very long fade curves alongside punchy, short-lived accents. Document representative parameter presets (for example, 0.6–0.8 EMA smoothing factors, 10–15% hysteresis bands, and stroke-count ceilings tied to tempo ranges) so implementers can tune the vibe quickly.
-4.  Validate through extended listening sessions across genres (ambient, techno, jazz). Confirm that the controller keeps the canvas alive without overwhelming it, that the smoothed metrics stay stable, and that overlapping strokes evolve at different cadences.
