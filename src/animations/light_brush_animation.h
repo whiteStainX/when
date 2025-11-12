@@ -27,6 +27,12 @@ struct TrailPoint {
     float thickness = 1.0f;
 };
 
+struct Color {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+};
+
 class BrushStroke {
 public:
     StrokeParticle head;
@@ -79,7 +85,7 @@ private:
     float elapsed_time_ = 0.0f;
     std::mt19937 rng_;
     std::vector<std::uint8_t> braille_masks_;
-    std::vector<float> braille_intensities_;
+    std::vector<Color> accumulation_buffer_;
 };
 
 } // namespace animations

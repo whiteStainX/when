@@ -301,7 +301,7 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
     const std::size_t cell_count =
         static_cast<std::size_t>(interior_height) * static_cast<std::size_t>(interior_width);
     braille_masks_.assign(cell_count, 0u);
-    braille_intensities_.assign(cell_count, 0.0f);
+    accumulation_buffer_.assign(cell_count, Color{});
 
     bool any_braille_samples = false;
     struct FallbackSample {
@@ -392,13 +392,18 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
             const std::size_t index =
                 static_cast<std::size_t>(row) * static_cast<std::size_t>(interior_width) +
                 static_cast<std::size_t>(col);
-            if (index >= braille_masks_.size() || index >= braille_intensities_.size()) {
+            if (index >= braille_masks_.size() || index >= accumulation_buffer_.size()) {
                 continue;
             }
 
             const std::uint8_t mask = braille_masks_[index];
-            const float intensity = braille_intensities_[index];
-            if (mask == 0u || intensity <= 0.0f) {
+            if (mask == 0u) {
+                continue;
+            }
+
+            const Color& color = accumulation_buffer_[index];
+            const float max_component = std::max({color.r, color.g, color.b});
+            if (max_component <= 0.0f) {
                 continue;
             }
 
@@ -408,9 +413,13 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
                 continue;
             }
 
-            const int color = static_cast<int>(std::round(
-                std::clamp(intensity, 0.0f, 1.0f) * static_cast<float>(kParticleForegroundColor)));
-            nccell_set_fg_rgb8(&cell, color, color, color);
+            const float clamped_r = std::clamp(color.r, 0.0f, 1.0f);
+            const float clamped_g = std::clamp(color.g, 0.0f, 1.0f);
+            const float clamped_b = std::clamp(color.b, 0.0f, 1.0f);
+            nccell_set_fg_rgb8(&cell,
+                               static_cast<int>(std::round(clamped_r * static_cast<float>(kParticleForegroundColor))),
+                               static_cast<int>(std::round(clamped_g * static_cast<float>(kParticleForegroundColor))),
+                               static_cast<int>(std::round(clamped_b * static_cast<float>(kParticleForegroundColor))));
             nccell_set_bg_rgb8(&cell,
                                static_cast<int>(kParticleBackgroundColor),
                                static_cast<int>(kParticleBackgroundColor),
@@ -562,7 +571,7 @@ bool LightBrushAnimation::render_point(float normalized_x,
     const int min_suby = std::max(0, static_cast<int>(std::floor(center_suby - radius)));
     const int max_suby = std::min(subrows - 1, static_cast<int>(std::ceil(center_suby + radius)));
 
-    if (braille_masks_.empty() || braille_intensities_.empty()) {
+    if (braille_masks_.empty() || accumulation_buffer_.empty()) {
         return false;
     }
 
@@ -596,12 +605,15 @@ bool LightBrushAnimation::render_point(float normalized_x,
             const std::size_t index =
                 static_cast<std::size_t>(cell_row) * static_cast<std::size_t>(interior_width) +
                 static_cast<std::size_t>(cell_col);
-            if (index >= braille_masks_.size() || index >= braille_intensities_.size()) {
+            if (index >= braille_masks_.size() || index >= accumulation_buffer_.size()) {
                 continue;
             }
 
             braille_masks_[index] |= kBrailleMask[dot_row][dot_col];
-            braille_intensities_[index] = std::max(braille_intensities_[index], sample_intensity);
+            Color& color = accumulation_buffer_[index];
+            color.r += sample_intensity;
+            color.g += sample_intensity;
+            color.b += sample_intensity;
             wrote_sample = true;
         }
     }
