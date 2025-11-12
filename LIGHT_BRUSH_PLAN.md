@@ -64,6 +64,8 @@ The animation will be contained within a continuous frame, similar to the `Space
   4.  Remove any particles where `age >= lifespan`.
 - **Validation:** Particles appear on the beat and fade away after a duration controlled by the high-frequency energy of the music.
 
+> **Implementation Note:** The effectiveness of this animation is highly dependent on the frequency of beat detection events (`bass_beat`, `mid_beat`, etc.). If strokes appear too infrequently, it may be necessary to tune the audio engine's beat detection parameters. Lowering `band_onset_sensitivity` in `feature_extractor.h` will make the detector more sensitive and cause more strokes to be spawned.
+
 ## Phase 2: Dynamic and Emotional Movement
 
 **Goal:** Move beyond random motion and make the strokes' paths feel intentional and emotionally connected to the music's harmony and texture.
