@@ -14,34 +14,15 @@
 namespace when {
 namespace animations {
 namespace {
-constexpr float kFrameFillRatio = 0.82f;
-constexpr float kCellWidthToHeightRatio = 0.5f;
-constexpr std::uint8_t kFrameForegroundColor = 240u;
-constexpr std::uint8_t kFrameBackgroundColor = 18u;
-constexpr std::uint8_t kParticleForegroundColor = 255u;
-constexpr std::uint8_t kParticleBackgroundColor = 0u;
 constexpr float kTwoPi = 6.28318530718f;
-constexpr float kHeavyVelocityMin = 0.08f;
-constexpr float kHeavyVelocityMax = 0.18f;
-constexpr float kLightVelocityMin = 0.18f;
-constexpr float kLightVelocityMax = 0.35f;
-constexpr float kHeavyLifespanMin = 1.1f;
-constexpr float kHeavyLifespanMax = 3.0f;
-constexpr float kLightLifespanMin = 0.6f;
-constexpr float kLightLifespanMax = 2.0f;
-constexpr float kSpeedScaleMin = 0.6f;
-constexpr float kSpeedScaleMax = 1.8f;
-constexpr float kTurbulenceBaseStrength = 0.45f;
 constexpr std::size_t kMaxAttractors = 3;
-constexpr float kAttractorRadius = 0.42f;
-constexpr float kSeekingStrength = 1.25f;
 constexpr float kAttractorEpsilon = 1.0e-3f;
 constexpr int kBrailleRowsPerCell = 4;
 constexpr int kBrailleColsPerCell = 2;
-constexpr float kThicknessMin = 0.35f;
-constexpr float kThicknessMax = 3.6f;
-constexpr float kThicknessSmoothing = 0.16f;
-constexpr float kThicknessRadiusScale = 1.35f;
+
+int clamp_color_value(int value) {
+    return std::clamp(value, 0, 255);
+}
 }
 
 LightBrushAnimation::LightBrushAnimation()
@@ -67,11 +48,13 @@ void LightBrushAnimation::init(notcurses* nc, const AppConfig& config) {
     plane_cols_ = 0;
     strokes_.clear();
     elapsed_time_ = 0.0f;
+    parameters_ = LightBrushParameters{};
 
     for (const auto& anim_config : config.animations) {
         if (anim_config.type == "LightBrush") {
             z_index_ = anim_config.z_index;
             is_active_ = anim_config.initially_active;
+            apply_animation_config(anim_config);
             break;
         }
     }
@@ -90,18 +73,22 @@ void LightBrushAnimation::update(float delta_time,
 
     const float clamped_total_energy = std::clamp(features.total_energy, 0.0f, 1.0f);
     // Map the smoothed total energy into a speed multiplier. Quiet passages nudge
-    // the scale toward kSpeedScaleMin while intense sections approach
-    // kSpeedScaleMax.
-    const float speed_scale =
-        kSpeedScaleMin + (kSpeedScaleMax - kSpeedScaleMin) * clamped_total_energy;
+    // the scale toward the configured minimum while intense sections approach
+    // the configured maximum.
+    const float speed_scale = parameters_.speed_scale_min +
+                               (parameters_.speed_scale_max - parameters_.speed_scale_min) *
+                                   clamped_total_energy;
 
     const float clamped_flatness = std::clamp(features.spectral_flatness, 0.0f, 1.0f);
     // Higher spectral flatness values (noisier textures) yield more turbulence,
     // keeping tonal passages comparatively smooth.
-    const float turbulence_strength = clamped_flatness * kTurbulenceBaseStrength * delta_time;
+    const float turbulence_strength =
+        clamped_flatness * parameters_.turbulence_base_strength * delta_time;
     const float clamped_beat_strength = std::clamp(features.beat_strength, 0.0f, 1.0f);
-    const float tonal_weight = 0.6f + (1.0f - clamped_flatness) * 0.8f;
-    const float beat_weight = 0.5f + clamped_beat_strength * 1.5f;
+    const float tonal_weight = parameters_.tonal_weight_base +
+                               (1.0f - clamped_flatness) * parameters_.tonal_weight_scale;
+    const float beat_weight =
+        parameters_.beat_weight_base + clamped_beat_strength * parameters_.beat_weight_scale;
     std::uniform_real_distribution<float> turbulence_dist(-1.0f, 1.0f);
 
     for (auto& stroke : strokes_) {
@@ -144,8 +131,8 @@ void LightBrushAnimation::update(float delta_time,
                     (static_cast<float>(note_index) / 12.0f) * kTwoPi;
                 const float strength_scale = strength / strongest;
 
-                const float x = 0.5f + std::cos(angle) * kAttractorRadius;
-                const float y = 0.5f + std::sin(angle) * kAttractorRadius;
+                const float x = 0.5f + std::cos(angle) * parameters_.attractor_radius;
+                const float y = 0.5f + std::sin(angle) * parameters_.attractor_radius;
 
                 attractor_positions[attractor_count] =
                     {std::clamp(x, 0.0f, 1.0f), std::clamp(y, 0.0f, 1.0f)};
@@ -161,10 +148,13 @@ void LightBrushAnimation::update(float delta_time,
 
     for (auto& stroke : strokes_) {
         auto& particle = stroke.head;
-        const float thickness_target =
-            std::clamp(stroke.base_thickness * beat_weight * tonal_weight, kThicknessMin, kThicknessMax);
-        stroke.thickness += (thickness_target - stroke.thickness) * kThicknessSmoothing;
-        stroke.thickness = std::clamp(stroke.thickness, kThicknessMin, kThicknessMax);
+        const float thickness_target = std::clamp(stroke.base_thickness * beat_weight * tonal_weight,
+                                                  parameters_.thickness_min,
+                                                  parameters_.thickness_max);
+        stroke.thickness +=
+            (thickness_target - stroke.thickness) * parameters_.thickness_smoothing;
+        stroke.thickness =
+            std::clamp(stroke.thickness, parameters_.thickness_min, parameters_.thickness_max);
         particle.thickness = stroke.thickness;
         if (attractor_count > 0) {
             float nearest_distance_sq = std::numeric_limits<float>::max();
@@ -188,9 +178,8 @@ void LightBrushAnimation::update(float delta_time,
                 const float dy = nearest_attractor.second - particle.y;
                 const float distance =
                     std::sqrt(std::max(nearest_distance_sq, kAttractorEpsilon));
-                const float scale =
-                    (kSeekingStrength * nearest_weight * delta_time) /
-                    (distance + kAttractorEpsilon);
+                const float scale = (parameters_.seeking_strength * nearest_weight * delta_time) /
+                                    (distance + kAttractorEpsilon);
                 particle.vx += dx * scale;
                 particle.vy += dy * scale;
             }
@@ -263,25 +252,27 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
     ncplane_erase(plane_);
 
     const float plane_physical_height = static_cast<float>(plane_rows_);
-    const float plane_physical_width = static_cast<float>(plane_cols_) * kCellWidthToHeightRatio;
+    const float cell_ratio = std::max(parameters_.cell_width_to_height_ratio, 1.0e-3f);
+    const float frame_fill_ratio = std::clamp(parameters_.frame_fill_ratio, 0.0f, 1.0f);
+    const float plane_physical_width = static_cast<float>(plane_cols_) * cell_ratio;
     const float max_physical_extent = std::min(plane_physical_height, plane_physical_width);
-    const float target_physical_extent = std::max(1.0f, max_physical_extent * kFrameFillRatio);
+    const float target_physical_extent = std::max(1.0f, max_physical_extent * frame_fill_ratio);
 
     const int max_width_for_height =
-        std::max(2, static_cast<int>(std::floor(static_cast<float>(plane_rows_) / kCellWidthToHeightRatio)));
+        std::max(2, static_cast<int>(std::floor(static_cast<float>(plane_rows_) / cell_ratio)));
 
-    int frame_width = static_cast<int>(std::round(target_physical_extent / kCellWidthToHeightRatio));
+    int frame_width = static_cast<int>(std::round(target_physical_extent / cell_ratio));
     frame_width = std::clamp(frame_width, 2, std::min(static_cast<int>(plane_cols_), max_width_for_height));
 
-    int frame_height = static_cast<int>(std::round(frame_width * kCellWidthToHeightRatio));
+    int frame_height = static_cast<int>(std::round(static_cast<float>(frame_width) * cell_ratio));
     frame_height = std::clamp(frame_height, 2, static_cast<int>(plane_rows_));
 
     frame_width =
-        std::clamp(static_cast<int>(std::round(static_cast<float>(frame_height) / kCellWidthToHeightRatio)),
+        std::clamp(static_cast<int>(std::round(static_cast<float>(frame_height) / cell_ratio)),
                    2,
                    static_cast<int>(plane_cols_));
     frame_height =
-        std::clamp(static_cast<int>(std::round(static_cast<float>(frame_width) * kCellWidthToHeightRatio)),
+        std::clamp(static_cast<int>(std::round(static_cast<float>(frame_width) * cell_ratio)),
                    2,
                    static_cast<int>(plane_rows_));
 
@@ -374,14 +365,13 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
 
         nccell cell = NCCELL_TRIVIAL_INITIALIZER;
         if (nccell_load_ucs32(plane_, &cell, 0x2588u) > 0) {
+            const int fg_color = clamp_color_value(parameters_.particle_foreground_color);
+            const int bg_color = clamp_color_value(parameters_.particle_background_color);
             const int color = static_cast<int>(
                 std::round(std::clamp(strongest_sample.intensity, 0.0f, 1.0f) *
-                           static_cast<float>(kParticleForegroundColor)));
+                           static_cast<float>(fg_color)));
             nccell_set_fg_rgb8(&cell, color, color, color);
-            nccell_set_bg_rgb8(&cell,
-                               static_cast<int>(kParticleBackgroundColor),
-                               static_cast<int>(kParticleBackgroundColor),
-                               static_cast<int>(kParticleBackgroundColor));
+            nccell_set_bg_rgb8(&cell, bg_color, bg_color, bg_color);
             ncplane_putc_yx(plane_, y, x, &cell);
             nccell_release(plane_, &cell);
         }
@@ -416,14 +406,13 @@ void LightBrushAnimation::render(notcurses* /*nc*/) {
             const float clamped_r = std::clamp(color.r, 0.0f, 1.0f);
             const float clamped_g = std::clamp(color.g, 0.0f, 1.0f);
             const float clamped_b = std::clamp(color.b, 0.0f, 1.0f);
+            const int fg_color = clamp_color_value(parameters_.particle_foreground_color);
+            const int bg_color = clamp_color_value(parameters_.particle_background_color);
             nccell_set_fg_rgb8(&cell,
-                               static_cast<int>(std::round(clamped_r * static_cast<float>(kParticleForegroundColor))),
-                               static_cast<int>(std::round(clamped_g * static_cast<float>(kParticleForegroundColor))),
-                               static_cast<int>(std::round(clamped_b * static_cast<float>(kParticleForegroundColor))));
-            nccell_set_bg_rgb8(&cell,
-                               static_cast<int>(kParticleBackgroundColor),
-                               static_cast<int>(kParticleBackgroundColor),
-                               static_cast<int>(kParticleBackgroundColor));
+                               static_cast<int>(std::round(clamped_r * static_cast<float>(fg_color))),
+                               static_cast<int>(std::round(clamped_g * static_cast<float>(fg_color))),
+                               static_cast<int>(std::round(clamped_b * static_cast<float>(fg_color))));
+            nccell_set_bg_rgb8(&cell, bg_color, bg_color, bg_color);
 
             ncplane_putc_yx(plane_, frame_y + 1 + row, frame_x + 1 + col, &cell);
             nccell_release(plane_, &cell);
@@ -456,6 +445,95 @@ ncplane* LightBrushAnimation::get_plane() const {
 
 void LightBrushAnimation::bind_events(const AnimationConfig& config, events::EventBus& bus) {
     bind_standard_frame_updates(this, config, bus);
+}
+
+void LightBrushAnimation::apply_animation_config(const AnimationConfig& config) {
+    const LightBrushParameters defaults;
+
+    parameters_.frame_fill_ratio =
+        std::clamp(config.light_brush_frame_fill_ratio, 0.0f, 1.0f);
+    if (!std::isfinite(parameters_.frame_fill_ratio)) {
+        parameters_.frame_fill_ratio = defaults.frame_fill_ratio;
+    }
+
+    parameters_.cell_width_to_height_ratio = config.light_brush_cell_aspect_ratio;
+    if (!std::isfinite(parameters_.cell_width_to_height_ratio) ||
+        parameters_.cell_width_to_height_ratio <= 0.0f) {
+        parameters_.cell_width_to_height_ratio = defaults.cell_width_to_height_ratio;
+    }
+
+    parameters_.frame_foreground_color =
+        clamp_color_value(config.light_brush_frame_foreground_color);
+    parameters_.frame_background_color =
+        clamp_color_value(config.light_brush_frame_background_color);
+    parameters_.particle_foreground_color =
+        clamp_color_value(config.light_brush_particle_foreground_color);
+    parameters_.particle_background_color =
+        clamp_color_value(config.light_brush_particle_background_color);
+
+    parameters_.heavy_velocity_min = std::max(0.0f, config.light_brush_heavy_velocity_min);
+    parameters_.heavy_velocity_max =
+        std::max(parameters_.heavy_velocity_min, std::max(0.0f, config.light_brush_heavy_velocity_max));
+
+    parameters_.light_velocity_min = std::max(0.0f, config.light_brush_light_velocity_min);
+    parameters_.light_velocity_max =
+        std::max(parameters_.light_velocity_min, std::max(0.0f, config.light_brush_light_velocity_max));
+
+    parameters_.heavy_lifespan_min = std::max(0.0f, config.light_brush_heavy_lifespan_min);
+    parameters_.heavy_lifespan_max =
+        std::max(parameters_.heavy_lifespan_min, std::max(0.0f, config.light_brush_heavy_lifespan_max));
+
+    parameters_.light_lifespan_min = std::max(0.0f, config.light_brush_light_lifespan_min);
+    parameters_.light_lifespan_max =
+        std::max(parameters_.light_lifespan_min, std::max(0.0f, config.light_brush_light_lifespan_max));
+
+    parameters_.speed_scale_min = std::max(0.0f, config.light_brush_speed_scale_min);
+    parameters_.speed_scale_max =
+        std::max(parameters_.speed_scale_min, std::max(0.0f, config.light_brush_speed_scale_max));
+
+    parameters_.turbulence_base_strength =
+        std::max(0.0f, config.light_brush_turbulence_base_strength);
+
+    parameters_.attractor_radius = std::clamp(config.light_brush_attractor_radius, 0.0f, 1.0f);
+    if (!std::isfinite(parameters_.attractor_radius)) {
+        parameters_.attractor_radius = defaults.attractor_radius;
+    }
+
+    parameters_.seeking_strength = std::max(0.0f, config.light_brush_seeking_strength);
+
+    parameters_.thickness_min = std::max(0.0f, config.light_brush_thickness_min);
+    parameters_.thickness_max =
+        std::max(parameters_.thickness_min, std::max(0.0f, config.light_brush_thickness_max));
+
+    parameters_.thickness_smoothing =
+        std::clamp(config.light_brush_thickness_smoothing, 0.0f, 1.0f);
+    if (!std::isfinite(parameters_.thickness_smoothing)) {
+        parameters_.thickness_smoothing = defaults.thickness_smoothing;
+    }
+
+    parameters_.thickness_radius_scale =
+        std::max(0.0f, config.light_brush_thickness_radius_scale);
+    if (!std::isfinite(parameters_.thickness_radius_scale) ||
+        parameters_.thickness_radius_scale <= 0.0f) {
+        parameters_.thickness_radius_scale = defaults.thickness_radius_scale;
+    }
+
+    parameters_.beat_weight_base = config.light_brush_beat_weight_base;
+    parameters_.beat_weight_scale = std::max(0.0f, config.light_brush_beat_weight_scale);
+    parameters_.tonal_weight_base = config.light_brush_tonal_weight_base;
+    parameters_.tonal_weight_scale = std::max(0.0f, config.light_brush_tonal_weight_scale);
+
+    parameters_.heavy_thickness_bias =
+        std::max(0.0f, config.light_brush_heavy_thickness_bias);
+    parameters_.light_thickness_bias =
+        std::max(0.0f, config.light_brush_light_thickness_bias);
+
+    parameters_.base_thickness_base = config.light_brush_base_thickness_base;
+    parameters_.base_thickness_beat_scale =
+        std::max(0.0f, config.light_brush_base_thickness_beat_scale);
+    parameters_.base_thickness_tonal_base = config.light_brush_base_thickness_tonal_base;
+    parameters_.base_thickness_tonal_scale =
+        std::max(0.0f, config.light_brush_base_thickness_tonal_scale);
 }
 
 void LightBrushAnimation::create_or_resize_plane(notcurses* nc) {
@@ -511,14 +589,13 @@ void LightBrushAnimation::draw_frame(int frame_y, int frame_x, int frame_height,
         if (nccell_load_ucs32(plane_, cell, glyph) <= 0) {
             return false;
         }
+        const int frame_fg = clamp_color_value(parameters_.frame_foreground_color);
+        const int frame_bg = clamp_color_value(parameters_.frame_background_color);
         nccell_set_fg_rgb8(cell,
-                           static_cast<int>(kFrameForegroundColor),
-                           static_cast<int>(kFrameForegroundColor),
-                           static_cast<int>(kFrameForegroundColor));
-        nccell_set_bg_rgb8(cell,
-                           static_cast<int>(kFrameBackgroundColor),
-                           static_cast<int>(kFrameBackgroundColor),
-                           static_cast<int>(kFrameBackgroundColor));
+                           frame_fg,
+                           frame_fg,
+                           frame_fg);
+        nccell_set_bg_rgb8(cell, frame_bg, frame_bg, frame_bg);
         return true;
     };
 
@@ -564,7 +641,7 @@ bool LightBrushAnimation::render_point(float normalized_x,
 
     const float center_subx = clamped_x * (static_cast<float>(subcols) - 1.0f);
     const float center_suby = clamped_y * (static_cast<float>(subrows) - 1.0f);
-    const float radius = std::max(thickness * kThicknessRadiusScale, 0.1f);
+    const float radius = std::max(thickness * parameters_.thickness_radius_scale, 0.1f);
 
     const int min_subx = std::max(0, static_cast<int>(std::floor(center_subx - radius)));
     const int max_subx = std::min(subcols - 1, static_cast<int>(std::ceil(center_subx + radius)));
@@ -643,8 +720,10 @@ void LightBrushAnimation::spawn_particles(int count,
 
     std::uniform_real_distribution<float> position_dist(0.0f, 1.0f);
     std::uniform_real_distribution<float> angle_dist(0.0f, kTwoPi);
-    const float min_speed = heavy ? kHeavyVelocityMin : kLightVelocityMin;
-    const float max_speed = heavy ? kHeavyVelocityMax : kLightVelocityMax;
+    const float raw_min_speed = heavy ? parameters_.heavy_velocity_min : parameters_.light_velocity_min;
+    const float raw_max_speed = heavy ? parameters_.heavy_velocity_max : parameters_.light_velocity_max;
+    const float min_speed = std::min(raw_min_speed, raw_max_speed);
+    const float max_speed = std::max(raw_min_speed, raw_max_speed);
     std::uniform_real_distribution<float> speed_dist(min_speed, max_speed);
 
     for (int i = 0; i < count; ++i) {
@@ -658,16 +737,24 @@ void LightBrushAnimation::spawn_particles(int count,
         stroke.head.vy = std::sin(angle) * speed;
         stroke.head.age = 0.0f;
 
-        const float lifespan_min = heavy ? kHeavyLifespanMin : kLightLifespanMin;
-        const float lifespan_max = heavy ? kHeavyLifespanMax : kLightLifespanMax;
+        const float raw_lifespan_min =
+            heavy ? parameters_.heavy_lifespan_min : parameters_.light_lifespan_min;
+        const float raw_lifespan_max =
+            heavy ? parameters_.heavy_lifespan_max : parameters_.light_lifespan_max;
+        const float lifespan_min = std::min(raw_lifespan_min, raw_lifespan_max);
+        const float lifespan_max = std::max(raw_lifespan_min, raw_lifespan_max);
         stroke.head.lifespan =
             lifespan_min + (lifespan_max - lifespan_min) * std::clamp(treble_envelope, 0.0f, 1.0f);
 
         const float clamped_beat = std::clamp(beat_strength, 0.0f, 1.0f);
         const float tonal_presence = 1.0f - std::clamp(spectral_flatness, 0.0f, 1.0f);
-        const float heavy_bias = heavy ? 1.25f : 0.9f;
-        float base_thickness = heavy_bias * (0.5f + clamped_beat * 1.6f) * (0.6f + tonal_presence * 0.8f);
-        base_thickness = std::clamp(base_thickness, kThicknessMin, kThicknessMax);
+        const float heavy_bias = heavy ? parameters_.heavy_thickness_bias : parameters_.light_thickness_bias;
+        float base_thickness =
+            heavy_bias *
+            (parameters_.base_thickness_base + clamped_beat * parameters_.base_thickness_beat_scale) *
+            (parameters_.base_thickness_tonal_base + tonal_presence * parameters_.base_thickness_tonal_scale);
+        base_thickness =
+            std::clamp(base_thickness, parameters_.thickness_min, parameters_.thickness_max);
         stroke.base_thickness = base_thickness;
         stroke.thickness = base_thickness;
         stroke.head.thickness = base_thickness;
