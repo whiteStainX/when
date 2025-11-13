@@ -99,6 +99,17 @@ struct AnimationConfig {
     std::string glyphs_file_path;        // Glyph file override for glyph-based animations
     float matrix_beat_boost = 1.5f;      // Beat multiplier for matrix animations
     float matrix_beat_threshold = 0.6f;  // Beat threshold for matrix animations
+    float light_cycle_base_speed = 0.35f;              // Base normalized speed for the light cycle
+    float light_cycle_energy_speed_scale = 0.45f;      // Additional speed based on total energy
+    float light_cycle_tail_duration_s = 5.0f;          // Trail persistence in seconds
+    float light_cycle_tail_fade_power = 1.6f;          // Exponent applied to trail fade curve
+    float light_cycle_turn_cooldown_s = 0.35f;         // Minimum time between audio-driven turns
+    float light_cycle_beat_turn_threshold = 0.55f;     // Beat strength required to trigger a turn
+    float light_cycle_energy_turn_threshold = 0.85f;   // Instantaneous energy required to trigger a turn
+    float light_cycle_thickness_min = 0.6f;            // Minimum trail thickness
+    float light_cycle_thickness_max = 3.6f;            // Maximum trail thickness
+    float light_cycle_thickness_smoothing = 0.18f;     // Smoothing for thickness modulation
+    float light_cycle_intensity_smoothing = 0.16f;     // Smoothing for intensity modulation
     int space_rock_spawn_base_count = 3; // Base number of squares to spawn per bass beat
     float space_rock_spawn_strength_scale = 4.0f; // Additional spawn scale driven by beat strength
     float space_rock_square_lifespan_ms = 1600.0f; // Lifespan of a square in milliseconds

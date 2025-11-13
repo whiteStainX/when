@@ -29,6 +29,7 @@ set(WHEN_SOURCES
   src/dsp.cpp
   src/animations/ascii_matrix_animation.cpp
   src/animations/light_brush_animation.cpp
+  src/animations/light_cycle_animation.cpp
   src/animations/space_rock_animation.cpp
   src/animations/pleasure_animation.cpp
   src/animations/animation_manager.cpp

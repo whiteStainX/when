@@ -4,6 +4,7 @@
 #include "pleasure_animation.h"
 #include "space_rock_animation.h"
 #include "light_brush_animation.h"
+#include "light_cycle_animation.h"
 
 #include "../config/raw_config.h"
 
@@ -27,6 +28,8 @@ void AnimationManager::load_animations(notcurses* nc, const AppConfig& app_confi
             new_animation = std::make_unique<SpaceRockAnimation>();
         } else if (cleaned_type == "LightBrush") {
             new_animation = std::make_unique<LightBrushAnimation>();
+        } else if (cleaned_type == "LightCycle") {
+            new_animation = std::make_unique<LightCycleAnimation>();
         }
 
         if (new_animation) {

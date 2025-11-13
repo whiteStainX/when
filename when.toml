@@ -84,7 +84,7 @@ space_rock_size_interp_rate = 3.5
 [[animations]]
 type = "Pleasure"
 z_index = 3
-initially_active = true
+initially_active = false
 plane_rows = 24
 plane_cols = 48
 pleasure_magnitude_scale = 0.1
@@ -111,3 +111,19 @@ pleasure_max_downward_excursion = 8
 type = "LightBrush"
 z_index = 3
 initially_active = false
+
+[[animations]]
+type = "LightCycle"
+z_index = 4
+initially_active = true
+light_cycle_base_speed = 0.32
+light_cycle_energy_speed_scale = 0.6
+light_cycle_tail_duration_s = 6.0
+light_cycle_tail_fade_power = 2.1
+light_cycle_turn_cooldown_s = 0.42
+light_cycle_beat_turn_threshold = 0.5
+light_cycle_energy_turn_threshold = 0.78
+light_cycle_thickness_min = 0.85
+light_cycle_thickness_max = 4.2
+light_cycle_thickness_smoothing = 0.22
+light_cycle_intensity_smoothing = 0.18
