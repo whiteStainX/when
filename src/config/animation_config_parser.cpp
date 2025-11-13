@@ -189,6 +189,71 @@ std::optional<AnimationConfig> parse_animation_config(
         parse_float32(beat_threshold_it->second.value, anim_config.matrix_beat_threshold);
     }
 
+    const auto light_cycle_base_speed_it = raw_anim_config.find("light_cycle_base_speed");
+    if (light_cycle_base_speed_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_base_speed_it->second.value, anim_config.light_cycle_base_speed);
+    }
+
+    const auto light_cycle_energy_speed_scale_it =
+        raw_anim_config.find("light_cycle_energy_speed_scale");
+    if (light_cycle_energy_speed_scale_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_energy_speed_scale_it->second.value,
+                      anim_config.light_cycle_energy_speed_scale);
+    }
+
+    const auto light_cycle_tail_duration_it = raw_anim_config.find("light_cycle_tail_duration_s");
+    if (light_cycle_tail_duration_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_tail_duration_it->second.value, anim_config.light_cycle_tail_duration_s);
+    }
+
+    const auto light_cycle_tail_fade_power_it = raw_anim_config.find("light_cycle_tail_fade_power");
+    if (light_cycle_tail_fade_power_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_tail_fade_power_it->second.value, anim_config.light_cycle_tail_fade_power);
+    }
+
+    const auto light_cycle_turn_cooldown_it = raw_anim_config.find("light_cycle_turn_cooldown_s");
+    if (light_cycle_turn_cooldown_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_turn_cooldown_it->second.value, anim_config.light_cycle_turn_cooldown_s);
+    }
+
+    const auto light_cycle_beat_turn_threshold_it =
+        raw_anim_config.find("light_cycle_beat_turn_threshold");
+    if (light_cycle_beat_turn_threshold_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_beat_turn_threshold_it->second.value,
+                      anim_config.light_cycle_beat_turn_threshold);
+    }
+
+    const auto light_cycle_energy_turn_threshold_it =
+        raw_anim_config.find("light_cycle_energy_turn_threshold");
+    if (light_cycle_energy_turn_threshold_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_energy_turn_threshold_it->second.value,
+                      anim_config.light_cycle_energy_turn_threshold);
+    }
+
+    const auto light_cycle_thickness_min_it = raw_anim_config.find("light_cycle_thickness_min");
+    if (light_cycle_thickness_min_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_thickness_min_it->second.value, anim_config.light_cycle_thickness_min);
+    }
+
+    const auto light_cycle_thickness_max_it = raw_anim_config.find("light_cycle_thickness_max");
+    if (light_cycle_thickness_max_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_thickness_max_it->second.value, anim_config.light_cycle_thickness_max);
+    }
+
+    const auto light_cycle_thickness_smoothing_it =
+        raw_anim_config.find("light_cycle_thickness_smoothing");
+    if (light_cycle_thickness_smoothing_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_thickness_smoothing_it->second.value,
+                      anim_config.light_cycle_thickness_smoothing);
+    }
+
+    const auto light_cycle_intensity_smoothing_it =
+        raw_anim_config.find("light_cycle_intensity_smoothing");
+    if (light_cycle_intensity_smoothing_it != raw_anim_config.end()) {
+        parse_float32(light_cycle_intensity_smoothing_it->second.value,
+                      anim_config.light_cycle_intensity_smoothing);
+    }
+
     const auto space_rock_spawn_base_count_it =
         raw_anim_config.find("space_rock_spawn_base_count");
     if (space_rock_spawn_base_count_it != raw_anim_config.end()) {
