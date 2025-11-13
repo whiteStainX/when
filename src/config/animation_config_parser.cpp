@@ -254,6 +254,237 @@ std::optional<AnimationConfig> parse_animation_config(
                       anim_config.light_cycle_intensity_smoothing);
     }
 
+    const auto light_brush_frame_fill_ratio_it =
+        raw_anim_config.find("light_brush_frame_fill_ratio");
+    if (light_brush_frame_fill_ratio_it != raw_anim_config.end()) {
+        parse_float32(light_brush_frame_fill_ratio_it->second.value,
+                      anim_config.light_brush_frame_fill_ratio);
+    }
+
+    const auto light_brush_cell_aspect_ratio_it =
+        raw_anim_config.find("light_brush_cell_aspect_ratio");
+    if (light_brush_cell_aspect_ratio_it != raw_anim_config.end()) {
+        parse_float32(light_brush_cell_aspect_ratio_it->second.value,
+                      anim_config.light_brush_cell_aspect_ratio);
+    }
+
+    const auto light_brush_frame_fg_it =
+        raw_anim_config.find("light_brush_frame_foreground_color");
+    if (light_brush_frame_fg_it != raw_anim_config.end()) {
+        parse_int32(light_brush_frame_fg_it->second.value,
+                    anim_config.light_brush_frame_foreground_color);
+    }
+
+    const auto light_brush_frame_bg_it =
+        raw_anim_config.find("light_brush_frame_background_color");
+    if (light_brush_frame_bg_it != raw_anim_config.end()) {
+        parse_int32(light_brush_frame_bg_it->second.value,
+                    anim_config.light_brush_frame_background_color);
+    }
+
+    const auto light_brush_particle_fg_it =
+        raw_anim_config.find("light_brush_particle_foreground_color");
+    if (light_brush_particle_fg_it != raw_anim_config.end()) {
+        parse_int32(light_brush_particle_fg_it->second.value,
+                    anim_config.light_brush_particle_foreground_color);
+    }
+
+    const auto light_brush_particle_bg_it =
+        raw_anim_config.find("light_brush_particle_background_color");
+    if (light_brush_particle_bg_it != raw_anim_config.end()) {
+        parse_int32(light_brush_particle_bg_it->second.value,
+                    anim_config.light_brush_particle_background_color);
+    }
+
+    const auto light_brush_heavy_velocity_min_it =
+        raw_anim_config.find("light_brush_heavy_velocity_min");
+    if (light_brush_heavy_velocity_min_it != raw_anim_config.end()) {
+        parse_float32(light_brush_heavy_velocity_min_it->second.value,
+                      anim_config.light_brush_heavy_velocity_min);
+    }
+
+    const auto light_brush_heavy_velocity_max_it =
+        raw_anim_config.find("light_brush_heavy_velocity_max");
+    if (light_brush_heavy_velocity_max_it != raw_anim_config.end()) {
+        parse_float32(light_brush_heavy_velocity_max_it->second.value,
+                      anim_config.light_brush_heavy_velocity_max);
+    }
+
+    const auto light_brush_light_velocity_min_it =
+        raw_anim_config.find("light_brush_light_velocity_min");
+    if (light_brush_light_velocity_min_it != raw_anim_config.end()) {
+        parse_float32(light_brush_light_velocity_min_it->second.value,
+                      anim_config.light_brush_light_velocity_min);
+    }
+
+    const auto light_brush_light_velocity_max_it =
+        raw_anim_config.find("light_brush_light_velocity_max");
+    if (light_brush_light_velocity_max_it != raw_anim_config.end()) {
+        parse_float32(light_brush_light_velocity_max_it->second.value,
+                      anim_config.light_brush_light_velocity_max);
+    }
+
+    const auto light_brush_heavy_lifespan_min_it =
+        raw_anim_config.find("light_brush_heavy_lifespan_min");
+    if (light_brush_heavy_lifespan_min_it != raw_anim_config.end()) {
+        parse_float32(light_brush_heavy_lifespan_min_it->second.value,
+                      anim_config.light_brush_heavy_lifespan_min);
+    }
+
+    const auto light_brush_heavy_lifespan_max_it =
+        raw_anim_config.find("light_brush_heavy_lifespan_max");
+    if (light_brush_heavy_lifespan_max_it != raw_anim_config.end()) {
+        parse_float32(light_brush_heavy_lifespan_max_it->second.value,
+                      anim_config.light_brush_heavy_lifespan_max);
+    }
+
+    const auto light_brush_light_lifespan_min_it =
+        raw_anim_config.find("light_brush_light_lifespan_min");
+    if (light_brush_light_lifespan_min_it != raw_anim_config.end()) {
+        parse_float32(light_brush_light_lifespan_min_it->second.value,
+                      anim_config.light_brush_light_lifespan_min);
+    }
+
+    const auto light_brush_light_lifespan_max_it =
+        raw_anim_config.find("light_brush_light_lifespan_max");
+    if (light_brush_light_lifespan_max_it != raw_anim_config.end()) {
+        parse_float32(light_brush_light_lifespan_max_it->second.value,
+                      anim_config.light_brush_light_lifespan_max);
+    }
+
+    const auto light_brush_speed_scale_min_it =
+        raw_anim_config.find("light_brush_speed_scale_min");
+    if (light_brush_speed_scale_min_it != raw_anim_config.end()) {
+        parse_float32(light_brush_speed_scale_min_it->second.value,
+                      anim_config.light_brush_speed_scale_min);
+    }
+
+    const auto light_brush_speed_scale_max_it =
+        raw_anim_config.find("light_brush_speed_scale_max");
+    if (light_brush_speed_scale_max_it != raw_anim_config.end()) {
+        parse_float32(light_brush_speed_scale_max_it->second.value,
+                      anim_config.light_brush_speed_scale_max);
+    }
+
+    const auto light_brush_turbulence_base_strength_it =
+        raw_anim_config.find("light_brush_turbulence_base_strength");
+    if (light_brush_turbulence_base_strength_it != raw_anim_config.end()) {
+        parse_float32(light_brush_turbulence_base_strength_it->second.value,
+                      anim_config.light_brush_turbulence_base_strength);
+    }
+
+    const auto light_brush_attractor_radius_it =
+        raw_anim_config.find("light_brush_attractor_radius");
+    if (light_brush_attractor_radius_it != raw_anim_config.end()) {
+        parse_float32(light_brush_attractor_radius_it->second.value,
+                      anim_config.light_brush_attractor_radius);
+    }
+
+    const auto light_brush_seeking_strength_it =
+        raw_anim_config.find("light_brush_seeking_strength");
+    if (light_brush_seeking_strength_it != raw_anim_config.end()) {
+        parse_float32(light_brush_seeking_strength_it->second.value,
+                      anim_config.light_brush_seeking_strength);
+    }
+
+    const auto light_brush_thickness_min_it =
+        raw_anim_config.find("light_brush_thickness_min");
+    if (light_brush_thickness_min_it != raw_anim_config.end()) {
+        parse_float32(light_brush_thickness_min_it->second.value,
+                      anim_config.light_brush_thickness_min);
+    }
+
+    const auto light_brush_thickness_max_it =
+        raw_anim_config.find("light_brush_thickness_max");
+    if (light_brush_thickness_max_it != raw_anim_config.end()) {
+        parse_float32(light_brush_thickness_max_it->second.value,
+                      anim_config.light_brush_thickness_max);
+    }
+
+    const auto light_brush_thickness_smoothing_it =
+        raw_anim_config.find("light_brush_thickness_smoothing");
+    if (light_brush_thickness_smoothing_it != raw_anim_config.end()) {
+        parse_float32(light_brush_thickness_smoothing_it->second.value,
+                      anim_config.light_brush_thickness_smoothing);
+    }
+
+    const auto light_brush_thickness_radius_scale_it =
+        raw_anim_config.find("light_brush_thickness_radius_scale");
+    if (light_brush_thickness_radius_scale_it != raw_anim_config.end()) {
+        parse_float32(light_brush_thickness_radius_scale_it->second.value,
+                      anim_config.light_brush_thickness_radius_scale);
+    }
+
+    const auto light_brush_beat_weight_base_it =
+        raw_anim_config.find("light_brush_beat_weight_base");
+    if (light_brush_beat_weight_base_it != raw_anim_config.end()) {
+        parse_float32(light_brush_beat_weight_base_it->second.value,
+                      anim_config.light_brush_beat_weight_base);
+    }
+
+    const auto light_brush_beat_weight_scale_it =
+        raw_anim_config.find("light_brush_beat_weight_scale");
+    if (light_brush_beat_weight_scale_it != raw_anim_config.end()) {
+        parse_float32(light_brush_beat_weight_scale_it->second.value,
+                      anim_config.light_brush_beat_weight_scale);
+    }
+
+    const auto light_brush_tonal_weight_base_it =
+        raw_anim_config.find("light_brush_tonal_weight_base");
+    if (light_brush_tonal_weight_base_it != raw_anim_config.end()) {
+        parse_float32(light_brush_tonal_weight_base_it->second.value,
+                      anim_config.light_brush_tonal_weight_base);
+    }
+
+    const auto light_brush_tonal_weight_scale_it =
+        raw_anim_config.find("light_brush_tonal_weight_scale");
+    if (light_brush_tonal_weight_scale_it != raw_anim_config.end()) {
+        parse_float32(light_brush_tonal_weight_scale_it->second.value,
+                      anim_config.light_brush_tonal_weight_scale);
+    }
+
+    const auto light_brush_heavy_thickness_bias_it =
+        raw_anim_config.find("light_brush_heavy_thickness_bias");
+    if (light_brush_heavy_thickness_bias_it != raw_anim_config.end()) {
+        parse_float32(light_brush_heavy_thickness_bias_it->second.value,
+                      anim_config.light_brush_heavy_thickness_bias);
+    }
+
+    const auto light_brush_light_thickness_bias_it =
+        raw_anim_config.find("light_brush_light_thickness_bias");
+    if (light_brush_light_thickness_bias_it != raw_anim_config.end()) {
+        parse_float32(light_brush_light_thickness_bias_it->second.value,
+                      anim_config.light_brush_light_thickness_bias);
+    }
+
+    const auto light_brush_base_thickness_base_it =
+        raw_anim_config.find("light_brush_base_thickness_base");
+    if (light_brush_base_thickness_base_it != raw_anim_config.end()) {
+        parse_float32(light_brush_base_thickness_base_it->second.value,
+                      anim_config.light_brush_base_thickness_base);
+    }
+
+    const auto light_brush_base_thickness_beat_scale_it =
+        raw_anim_config.find("light_brush_base_thickness_beat_scale");
+    if (light_brush_base_thickness_beat_scale_it != raw_anim_config.end()) {
+        parse_float32(light_brush_base_thickness_beat_scale_it->second.value,
+                      anim_config.light_brush_base_thickness_beat_scale);
+    }
+
+    const auto light_brush_base_thickness_tonal_base_it =
+        raw_anim_config.find("light_brush_base_thickness_tonal_base");
+    if (light_brush_base_thickness_tonal_base_it != raw_anim_config.end()) {
+        parse_float32(light_brush_base_thickness_tonal_base_it->second.value,
+                      anim_config.light_brush_base_thickness_tonal_base);
+    }
+
+    const auto light_brush_base_thickness_tonal_scale_it =
+        raw_anim_config.find("light_brush_base_thickness_tonal_scale");
+    if (light_brush_base_thickness_tonal_scale_it != raw_anim_config.end()) {
+        parse_float32(light_brush_base_thickness_tonal_scale_it->second.value,
+                      anim_config.light_brush_base_thickness_tonal_scale);
+    }
+
     const auto space_rock_spawn_base_count_it =
         raw_anim_config.find("space_rock_spawn_base_count");
     if (space_rock_spawn_base_count_it != raw_anim_config.end()) {
