@@ -22,7 +22,9 @@ constexpr int kBrailleRowsPerCell = 4;
 constexpr int kBrailleColsPerCell = 2;
 constexpr float kThicknessRadiusScale = 1.35f;
 constexpr std::size_t kMaxTrailSamples = 2048;
-constexpr float kMinTurnSpacing = 0.12f;
+constexpr float kHaloIntensityScale = 0.45f;
+constexpr float kHaloThicknessScale = 2.1f;
+constexpr float kBaseSpeedBoost = 1.35f;
 }
 
 LightCycleAnimation::LightCycleAnimation()
@@ -47,10 +49,9 @@ void LightCycleAnimation::init(notcurses* nc, const AppConfig& config) {
     plane_rows_ = 0;
     plane_cols_ = 0;
     elapsed_time_ = 0.0f;
-    time_since_last_turn_ = 0.0f;
-    current_thickness_ = 1.0f;
-    glow_intensity_ = 0.5f;
+    time_since_last_spawn_ = 0.0f;
     trail_.clear();
+    cycles_.clear();
 
     for (const auto& anim_config : config.animations) {
         if (anim_config.type == "LightCycle") {
@@ -72,7 +73,6 @@ void LightCycleAnimation::init(notcurses* nc, const AppConfig& config) {
     }
 
     create_or_resize_plane(nc);
-    ensure_cycle_seeded();
 }
 
 void LightCycleAnimation::update(float delta_time,
@@ -83,41 +83,32 @@ void LightCycleAnimation::update(float delta_time,
     }
 
     elapsed_time_ += delta_time;
-    time_since_last_turn_ += delta_time;
-    last_features_ = features;
+    time_since_last_spawn_ += delta_time;
 
     const float clamped_energy = std::clamp(features.total_energy, 0.0f, 1.0f);
     const float clamped_instant = std::clamp(features.total_energy_instantaneous, 0.0f, 1.0f);
-    const float clamped_bass = std::clamp(features.bass_envelope, 0.0f, 1.0f);
-
-    const float target_thickness = thickness_min_ + (thickness_max_ - thickness_min_) * clamped_bass;
-    current_thickness_ += (target_thickness - current_thickness_) * thickness_smoothing_;
-
-    const float target_glow = 0.35f + clamped_energy * 0.65f;
-    glow_intensity_ += (target_glow - glow_intensity_) * intensity_smoothing_;
-
-    const float speed = base_speed_ + energy_speed_scale_ * clamped_energy;
-    const float delta = speed * delta_time;
-
-    if (orientation_ == Orientation::Horizontal) {
-        head_x_ += static_cast<float>(direction_sign_) * delta;
-        head_y_ = anchor_coordinate_;
-    } else {
-        head_y_ += static_cast<float>(direction_sign_) * delta;
-        head_x_ = anchor_coordinate_;
-    }
-
-    clamp_head_to_bounds();
-
-    append_trail_sample(current_thickness_, glow_intensity_);
-    trim_trail();
-
     const bool beat_trigger = features.beat_detected && features.beat_strength >= beat_turn_threshold_;
     const bool energy_trigger = clamped_instant >= energy_turn_threshold_;
+    const bool turn_trigger = beat_trigger || energy_trigger;
 
-    if (beat_trigger || energy_trigger) {
-        attempt_turn(features, false);
+    const float interval_range = kMaxSpawnInterval - kMinSpawnInterval;
+    const float spawn_interval =
+        std::clamp(kMaxSpawnInterval - interval_range * clamped_energy, kMinSpawnInterval, kMaxSpawnInterval);
+
+    if ((cycles_.size() < kMaxActiveCycles && time_since_last_spawn_ >= spawn_interval) || cycles_.empty()) {
+        spawn_cycle();
+        time_since_last_spawn_ = 0.0f;
     }
+
+    for (auto& cycle : cycles_) {
+        update_cycle(cycle, delta_time, features, turn_trigger);
+    }
+
+    cycles_.erase(
+        std::remove_if(cycles_.begin(), cycles_.end(), [&](const LightCycleCycle& cycle) { return cycle_past_bounds(cycle); }),
+        cycles_.end());
+
+    trim_trail();
 }
 
 void LightCycleAnimation::render(notcurses* /*nc*/) {
@@ -189,27 +180,52 @@ void LightCycleAnimation::render(notcurses* /*nc*/) {
                                     point.y,
                                     brightness,
                                     point.thickness,
-                                    trail_color_,
+                                    point.color,
+                                    frame_y,
+                                    frame_x,
+                                    interior_height,
+                                    interior_width);
+
+        any_samples |= render_point(point.x,
+                                    point.y,
+                                    brightness * kHaloIntensityScale,
+                                    point.thickness * kHaloThicknessScale,
+                                    point.color,
                                     frame_y,
                                     frame_x,
                                     interior_height,
                                     interior_width);
     }
 
-    const float head_brightness = std::clamp(glow_intensity_, 0.0f, 1.0f);
-    any_samples |= render_point(head_x_,
-                                head_y_,
-                                head_brightness,
-                                std::max(current_thickness_, thickness_min_),
-                                head_color_,
-                                frame_y,
-                                frame_x,
-                                interior_height,
-                                interior_width);
+    for (const auto& cycle : cycles_) {
+        const float head_brightness = std::clamp(cycle.glow, 0.0f, 1.2f);
+        const float thickness = std::max(thickness_min_, cycle.thickness);
+        any_samples |= render_point(cycle.head_x,
+                                    cycle.head_y,
+                                    head_brightness,
+                                    thickness,
+                                    cycle.color,
+                                    frame_y,
+                                    frame_x,
+                                    interior_height,
+                                    interior_width);
+
+        any_samples |= render_point(cycle.head_x,
+                                    cycle.head_y,
+                                    head_brightness * (kHaloIntensityScale + 0.15f),
+                                    thickness * (kHaloThicknessScale + 0.35f),
+                                    cycle.color,
+                                    frame_y,
+                                    frame_x,
+                                    interior_height,
+                                    interior_width);
+    }
 
     if (!any_samples) {
-        const float clamped_x = std::clamp(head_x_, 0.0f, 1.0f);
-        const float clamped_y = std::clamp(head_y_, 0.0f, 1.0f);
+        const float fallback_x = !cycles_.empty() ? cycles_.front().head_x : 0.5f;
+        const float fallback_y = !cycles_.empty() ? cycles_.front().head_y : 0.5f;
+        const float clamped_x = std::clamp(fallback_x, 0.0f, 1.0f);
+        const float clamped_y = std::clamp(fallback_y, 0.0f, 1.0f);
         const int y = frame_y + 1 +
                       static_cast<int>(std::round(clamped_y * std::max(0, interior_height - 1)));
         const int x = frame_x + 1 +
@@ -217,9 +233,9 @@ void LightCycleAnimation::render(notcurses* /*nc*/) {
 
         nccell cell = NCCELL_TRIVIAL_INITIALIZER;
         if (nccell_load_ucs32(plane_, &cell, 0x2588u) > 0) {
-            const float scaled_r = std::clamp(head_color_.r * head_brightness, 0.0f, 1.0f);
-            const float scaled_g = std::clamp(head_color_.g * head_brightness, 0.0f, 1.0f);
-            const float scaled_b = std::clamp(head_color_.b * head_brightness, 0.0f, 1.0f);
+            const float scaled_r = std::clamp(head_color_.r, 0.0f, 1.0f);
+            const float scaled_g = std::clamp(head_color_.g, 0.0f, 1.0f);
+            const float scaled_b = std::clamp(head_color_.b, 0.0f, 1.0f);
             nccell_set_fg_rgb8(&cell,
                                static_cast<int>(std::round(scaled_r * static_cast<float>(kCycleForegroundColor))),
                                static_cast<int>(std::round(scaled_g * static_cast<float>(kCycleForegroundColor))),
@@ -477,27 +493,167 @@ float LightCycleAnimation::compute_trail_brightness(float age) const {
     return std::pow(eased, tail_fade_power_);
 }
 
-void LightCycleAnimation::ensure_cycle_seeded() {
-    std::uniform_real_distribution<float> position_dist(0.1f, 0.9f);
-    head_x_ = position_dist(rng_);
-    head_y_ = position_dist(rng_);
-
+void LightCycleAnimation::spawn_cycle() {
+    LightCycleCycle cycle;
+    std::uniform_real_distribution<float> position_dist(0.05f, 0.95f);
     std::uniform_int_distribution<int> orientation_dist(0, 1);
-    orientation_ = orientation_dist(rng_) == 0 ? Orientation::Horizontal : Orientation::Vertical;
-    anchor_coordinate_ = orientation_ == Orientation::Horizontal ? head_y_ : head_x_;
-
     std::uniform_int_distribution<int> direction_dist(0, 1);
-    direction_sign_ = direction_dist(rng_) == 0 ? -1 : 1;
+    std::uniform_real_distribution<float> speed_dist(0.9f, 1.35f);
+    std::uniform_real_distribution<float> color_mix(0.35f, 0.95f);
+    std::uniform_real_distribution<float> turn_delay_dist(0.05f, 0.35f);
 
-    trail_.clear();
-    append_trail_sample(current_thickness_, glow_intensity_);
+    cycle.orientation = orientation_dist(rng_) == 0 ? Orientation::Horizontal : Orientation::Vertical;
+    cycle.direction_sign = direction_dist(rng_) == 0 ? -1 : 1;
+    cycle.anchor_coordinate = position_dist(rng_);
+    cycle.speed_multiplier = speed_dist(rng_);
+    cycle.min_turn_delay = turn_delay_dist(rng_);
+
+    if (cycle.orientation == Orientation::Horizontal) {
+        cycle.head_y = cycle.anchor_coordinate;
+        cycle.head_x = cycle.direction_sign > 0 ? -kEntryMargin : 1.0f + kEntryMargin;
+    } else {
+        cycle.head_x = cycle.anchor_coordinate;
+        cycle.head_y = cycle.direction_sign > 0 ? -kEntryMargin : 1.0f + kEntryMargin;
+    }
+
+    const float mix = color_mix(rng_);
+    cycle.color = {std::clamp(head_color_.r * mix + trail_color_.r * (1.0f - mix), 0.0f, 1.0f),
+                   std::clamp(head_color_.g * mix + trail_color_.g * (1.0f - mix), 0.0f, 1.0f),
+                   std::clamp(head_color_.b * mix + trail_color_.b * (1.0f - mix), 0.0f, 1.0f)};
+    cycle.thickness = (thickness_min_ + thickness_max_) * 0.5f;
+    cycle.glow = 0.45f;
+
+    cycles_.push_back(cycle);
 }
 
-void LightCycleAnimation::append_trail_sample(float thickness, float intensity) {
+void LightCycleAnimation::update_cycle(LightCycleCycle& cycle,
+                                       float delta_time,
+                                       const AudioFeatures& features,
+                                       bool turn_trigger) {
+    cycle.time_since_spawn += delta_time;
+    if (cycle.has_turned) {
+        cycle.time_since_turn += delta_time;
+    }
+
+    const float clamped_energy = std::clamp(features.total_energy, 0.0f, 1.0f);
+    const float clamped_bass = std::clamp(features.bass_envelope, 0.0f, 1.0f);
+
+    const float target_thickness = thickness_min_ + (thickness_max_ - thickness_min_) * clamped_bass;
+    cycle.thickness += (target_thickness - cycle.thickness) * thickness_smoothing_;
+
+    const float target_glow = 0.45f + clamped_energy * 0.65f;
+    cycle.glow += (target_glow - cycle.glow) * intensity_smoothing_;
+
+    const float speed = (base_speed_ * kBaseSpeedBoost + energy_speed_scale_ * clamped_energy) * cycle.speed_multiplier;
+    const float delta = speed * delta_time;
+
+    if (cycle.orientation == Orientation::Horizontal) {
+        cycle.head_x += static_cast<float>(cycle.direction_sign) * delta;
+        cycle.head_y = cycle.anchor_coordinate;
+    } else {
+        cycle.head_y += static_cast<float>(cycle.direction_sign) * delta;
+        cycle.head_x = cycle.anchor_coordinate;
+    }
+
+    append_trail_sample(cycle);
+
+    const float required_turn_time = std::max(kMinTurnDelay + cycle.min_turn_delay, turn_cooldown_s_);
+    if (!cycle.has_turned && turn_trigger && cycle.time_since_spawn >= required_turn_time &&
+        cycle_inside_bounds(cycle)) {
+        turn_cycle(cycle, features);
+    }
+}
+
+void LightCycleAnimation::turn_cycle(LightCycleCycle& cycle, const AudioFeatures& features) {
+    cycle.has_turned = true;
+    cycle.time_since_turn = 0.0f;
+    cycle.orientation = cycle.orientation == Orientation::Horizontal ? Orientation::Vertical : Orientation::Horizontal;
+    cycle.anchor_coordinate = cycle.orientation == Orientation::Horizontal ? cycle.head_y : cycle.head_x;
+    cycle.direction_sign = choose_direction(cycle.orientation, features, cycle);
+    if (cycle.direction_sign == 0) {
+        cycle.direction_sign = 1;
+    }
+}
+
+int LightCycleAnimation::choose_direction(Orientation orientation,
+                                          const AudioFeatures& features,
+                                          const LightCycleCycle& cycle) {
+    std::uniform_int_distribution<int> coin_flip(0, 1);
+    int direction = 0;
+
+    if (orientation == Orientation::Horizontal) {
+        const float tonal_bias = std::clamp(features.treble_energy - features.bass_energy, -1.0f, 1.0f);
+        direction = tonal_bias >= 0.0f ? 1 : -1;
+        if (std::abs(tonal_bias) < 0.1f) {
+            direction = coin_flip(rng_) == 0 ? -1 : 1;
+        }
+
+        if (cycle.head_x <= 0.05f) {
+            direction = 1;
+        } else if (cycle.head_x >= 0.95f) {
+            direction = -1;
+        }
+    } else {
+        const float bass_bias = std::clamp(features.bass_energy - features.mid_energy, -1.0f, 1.0f);
+        direction = bass_bias >= 0.0f ? 1 : -1;
+        if (std::abs(bass_bias) < 0.1f) {
+            direction = coin_flip(rng_) == 0 ? -1 : 1;
+        }
+
+        if (cycle.head_y <= 0.05f) {
+            direction = 1;
+        } else if (cycle.head_y >= 0.95f) {
+            direction = -1;
+        }
+    }
+
+    if (direction == 0) {
+        direction = coin_flip(rng_) == 0 ? -1 : 1;
+    }
+
+    return direction;
+}
+
+bool LightCycleAnimation::cycle_inside_bounds(const LightCycleCycle& cycle) const {
+    const float min_pos = 0.0f;
+    const float max_pos = 1.0f;
+    if (cycle.orientation == Orientation::Horizontal) {
+        return cycle.head_x >= min_pos && cycle.head_x <= max_pos;
+    }
+    return cycle.head_y >= min_pos && cycle.head_y <= max_pos;
+}
+
+bool LightCycleAnimation::cycle_past_bounds(const LightCycleCycle& cycle) const {
+    if (!cycle.has_turned) {
+        return false;
+    }
+
+    const float min_pos = -kEntryMargin * 1.5f;
+    const float max_pos = 1.0f + kEntryMargin * 1.5f;
+    if (cycle.orientation == Orientation::Horizontal) {
+        if (cycle.direction_sign > 0) {
+            return cycle.head_x >= max_pos;
+        }
+        return cycle.head_x <= min_pos;
+    }
+
+    if (cycle.direction_sign > 0) {
+        return cycle.head_y >= max_pos;
+    }
+    return cycle.head_y <= min_pos;
+}
+
+void LightCycleAnimation::append_trail_sample(const LightCycleCycle& cycle) {
     if (trail_.size() >= kMaxTrailSamples) {
         trail_.pop_front();
     }
-    trail_.push_back(LightCycleTrailPoint{head_x_, head_y_, elapsed_time_, thickness, intensity});
+
+    LightCycleColor mixed_color = {std::clamp((trail_color_.r + cycle.color.r) * 0.5f, 0.0f, 1.0f),
+                                   std::clamp((trail_color_.g + cycle.color.g) * 0.5f, 0.0f, 1.0f),
+                                   std::clamp((trail_color_.b + cycle.color.b) * 0.5f, 0.0f, 1.0f)};
+
+    trail_.push_back(
+        LightCycleTrailPoint{cycle.head_x, cycle.head_y, elapsed_time_, cycle.thickness, cycle.glow, mixed_color});
 }
 
 void LightCycleAnimation::trim_trail() {
@@ -507,98 +663,6 @@ void LightCycleAnimation::trim_trail() {
             break;
         }
         trail_.pop_front();
-    }
-}
-
-void LightCycleAnimation::attempt_turn(const AudioFeatures& features, bool forced) {
-    if (!forced && time_since_last_turn_ < std::max(kMinTurnSpacing, turn_cooldown_s_)) {
-        return;
-    }
-
-    const Orientation next_orientation =
-        orientation_ == Orientation::Horizontal ? Orientation::Vertical : Orientation::Horizontal;
-    orientation_ = next_orientation;
-    anchor_coordinate_ = next_orientation == Orientation::Horizontal ? head_y_ : head_x_;
-    direction_sign_ = choose_direction(next_orientation, features);
-    if (direction_sign_ == 0) {
-        direction_sign_ = 1;
-    }
-    time_since_last_turn_ = 0.0f;
-}
-
-int LightCycleAnimation::choose_direction(Orientation orientation, const AudioFeatures& features) {
-    std::uniform_int_distribution<int> coin_flip(0, 1);
-
-    int direction = 0;
-    if (orientation == Orientation::Horizontal) {
-        const float tonal_bias = std::clamp(features.treble_energy - features.bass_energy, -1.0f, 1.0f);
-        direction = tonal_bias >= 0.0f ? 1 : -1;
-        if (std::abs(tonal_bias) < 0.1f) {
-            direction = coin_flip(rng_) == 0 ? -1 : 1;
-        }
-
-        if (head_x_ <= 0.1f) {
-            direction = 1;
-        } else if (head_x_ >= 0.9f) {
-            direction = -1;
-        }
-
-        if (direction > 0 && head_x_ >= 0.92f) {
-            direction = -1;
-        } else if (direction < 0 && head_x_ <= 0.08f) {
-            direction = 1;
-        }
-
-        if (direction == 0) {
-            direction = coin_flip(rng_) == 0 ? -1 : 1;
-        }
-    } else {
-        const float bass_bias = std::clamp(features.bass_energy - features.mid_energy, -1.0f, 1.0f);
-        direction = bass_bias >= 0.0f ? 1 : -1;
-        if (std::abs(bass_bias) < 0.1f) {
-            direction = coin_flip(rng_) == 0 ? -1 : 1;
-        }
-
-        if (head_y_ <= 0.1f) {
-            direction = 1;
-        } else if (head_y_ >= 0.9f) {
-            direction = -1;
-        }
-
-        if (direction > 0 && head_y_ >= 0.92f) {
-            direction = -1;
-        } else if (direction < 0 && head_y_ <= 0.08f) {
-            direction = 1;
-        }
-
-        if (direction == 0) {
-            direction = coin_flip(rng_) == 0 ? -1 : 1;
-        }
-    }
-
-    return direction;
-}
-
-void LightCycleAnimation::clamp_head_to_bounds() {
-    const float min_pos = 0.0f;
-    const float max_pos = 1.0f;
-
-    if (orientation_ == Orientation::Horizontal) {
-        if (head_x_ <= min_pos) {
-            head_x_ = min_pos;
-            attempt_turn(last_features_, true);
-        } else if (head_x_ >= max_pos) {
-            head_x_ = max_pos;
-            attempt_turn(last_features_, true);
-        }
-    } else {
-        if (head_y_ <= min_pos) {
-            head_y_ = min_pos;
-            attempt_turn(last_features_, true);
-        } else if (head_y_ >= max_pos) {
-            head_y_ = max_pos;
-            attempt_turn(last_features_, true);
-        }
     }
 }
 

@@ -10,18 +10,19 @@
 namespace when {
 namespace animations {
 
+struct LightCycleColor {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+};
+
 struct LightCycleTrailPoint {
     float x = 0.5f;
     float y = 0.5f;
     float spawn_time = 0.0f;
     float thickness = 1.0f;
     float intensity = 1.0f;
-};
-
-struct LightCycleColor {
-    float r = 0.0f;
-    float g = 0.0f;
-    float b = 0.0f;
+    LightCycleColor color;
 };
 
 class LightCycleAnimation : public Animation {
@@ -44,6 +45,22 @@ public:
 private:
     enum class Orientation { Horizontal, Vertical };
 
+    struct LightCycleCycle {
+        Orientation orientation = Orientation::Horizontal;
+        int direction_sign = 1;
+        float head_x = 0.0f;
+        float head_y = 0.0f;
+        float anchor_coordinate = 0.5f;
+        bool has_turned = false;
+        float time_since_turn = 0.0f;
+        float time_since_spawn = 0.0f;
+        float thickness = 1.0f;
+        float glow = 0.5f;
+        float speed_multiplier = 1.0f;
+        float min_turn_delay = 0.0f;
+        LightCycleColor color;
+    };
+
     void create_or_resize_plane(notcurses* nc);
     void draw_frame(int frame_y, int frame_x, int frame_height, int frame_width);
     bool render_point(float normalized_x,
@@ -56,12 +73,19 @@ private:
                       int interior_height,
                       int interior_width);
     float compute_trail_brightness(float age) const;
-    void ensure_cycle_seeded();
-    void append_trail_sample(float thickness, float intensity);
+    void spawn_cycle();
+    void update_cycle(LightCycleCycle& cycle,
+                      float delta_time,
+                      const AudioFeatures& features,
+                      bool turn_trigger);
+    void turn_cycle(LightCycleCycle& cycle, const AudioFeatures& features);
+    int choose_direction(Orientation orientation,
+                         const AudioFeatures& features,
+                         const LightCycleCycle& cycle);
+    bool cycle_inside_bounds(const LightCycleCycle& cycle) const;
+    bool cycle_past_bounds(const LightCycleCycle& cycle) const;
+    void append_trail_sample(const LightCycleCycle& cycle);
     void trim_trail();
-    void attempt_turn(const AudioFeatures& features, bool forced);
-    int choose_direction(Orientation orientation, const AudioFeatures& features);
-    void clamp_head_to_bounds();
 
     ncplane* plane_ = nullptr;
     bool is_active_ = false;
@@ -70,22 +94,14 @@ private:
     unsigned int plane_cols_ = 0;
 
     std::deque<LightCycleTrailPoint> trail_;
+    std::vector<LightCycleCycle> cycles_;
     std::vector<std::uint8_t> braille_masks_;
     std::vector<LightCycleColor> accumulation_buffer_;
 
     std::mt19937 rng_;
 
-    Orientation orientation_ = Orientation::Horizontal;
-    int direction_sign_ = 1;
-    float head_x_ = 0.5f;
-    float head_y_ = 0.5f;
-    float anchor_coordinate_ = 0.5f;
-    AudioFeatures last_features_{};
-
     float elapsed_time_ = 0.0f;
-    float time_since_last_turn_ = 0.0f;
-    float current_thickness_ = 1.0f;
-    float glow_intensity_ = 0.5f;
+    float time_since_last_spawn_ = 0.0f;
 
     // Configuration
     float base_speed_ = 0.35f;
@@ -99,6 +115,12 @@ private:
     float thickness_max_ = 3.6f;
     float thickness_smoothing_ = 0.18f;
     float intensity_smoothing_ = 0.16f;
+
+    static constexpr std::size_t kMaxActiveCycles = 4;
+    static constexpr float kEntryMargin = 0.12f;
+    static constexpr float kMinSpawnInterval = 0.35f;
+    static constexpr float kMaxSpawnInterval = 1.4f;
+    static constexpr float kMinTurnDelay = 0.15f;
 
     LightCycleColor trail_color_ = {0.15f, 0.7f, 1.0f};
     LightCycleColor head_color_ = {0.35f, 0.9f, 1.0f};
